@@ -23,7 +23,7 @@
 #include "audio.c"  // to remove
 
 /// a define used for the copy buffer in stream_data(...)
-#define BUFSIZE 1024
+/* #define BUFSIZE 1024 */
 #define PORT 1234
 #define error_handling(err, expr) ( (err) < 0 ? fprintf(stderr, expr ": %s\n", strerror(errno)), exit(EXIT_FAILURE): 0)
 
@@ -62,8 +62,8 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
   char *datafile, *libfile;
   char buffer[BUFSIZE];
   struct Firstmsg msg;  // To store the first received msg contining the file and library paths.
-  struct Audioconf;  // To store the configuaration of the audio file to be sent.
-  struct Datamsg;  // To store the chuks of the audio stream.
+  struct Audioconf conf;  // To store the configuaration of the audio file to be sent.
+  struct Datamsg audio_chunk;  // To store the chuks of the audio stream.
 
 
         
@@ -85,40 +85,63 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
   data_fd = aud_readinit(datafile, &sample_rate, &sample_size, &channels); // to uncomment
   if (data_fd < 0){
     printf("failed to open datafile %s, skipping request\n",datafile);
+    // check printf error code or use fprintf to print to standard error
+    conf.error = AUDIO_FILE_NOT_FOUND;
+    // Send error message back to client in the case the wav file was not found
     return -1;
   }
   printf("opened datafile %s\n", datafile);
+  // check printf error code
   printf("This the sample_rate: %d\nThis the sample_size: %d\nThis the channels: %d\n", sample_rate, sample_size, channels);  // to remove
   // optionally open a library
-  if (libfile){
+  if (libfile) {
     // try to open the library, if one is requested
     pfunc = NULL;
-    if (!pfunc){
+    if (!pfunc) {
       printf("failed to open the requested library. breaking hard\n");
+      // check error code
+      conf.error = LIB_NOT_FOUND;
+      // Send message back to client in the case the library was not found
       return -1;
     }
-    printf("opened libraryfile %s\n",libfile);
+    printf("opened libraryfile %s\n", libfile);
+    // check error code
   }
   else{
     pfunc = NULL;
     printf("not using a filter\n");
   }
-	
+
+  conf.channels = channels;
+  conf.audio_size = sample_size;
+  conf.audio_rate = sample_rate;
+  conf.error = SUCCESS;
+  err = sendto(client_fd, &conf, sizeof(struct Audioconf), 0, (struct sockaddr*) addr, sizeof(struct sockaddr_in));
+  error_handling(err, "Error while sending audio configuration datagram");
   // TO IMPLEMENT : optionally return an error code to the client if initialization went wrong
-	
+
+  // Send Audioconf packet back to client in order to inform on how to play the streamed data.
+
   // start streaming
   {
-    int bytesread, bytesmod;
+    int bytesread, bytesmod, i = 0;
 		
-    bytesread = read(data_fd, buffer, BUFSIZE);
-    while (bytesread > 0){
+    /* bytesread = read(data_fd, buffer, BUFSIZE); */
+    while ( (bytesread = read(data_fd, audio_chunk.buffer, BUFSIZE)) > 0){
+      i++;
       // you might also want to check that the client is still active, whether it wants resends, etc..
-			
+      /* audio_chunk.buffer = buffer; */
+      audio_chunk.length = bytesread;
+      audio_chunk.endflag = (bytesread < BUFSIZE) ? LAST_CHUNK : STILL_READING_FILE;
+      audio_chunk.msg_counter = i;
       // edit data in-place. Not necessarily the best option
-      if (pfunc)
-        bytesmod = pfunc(buffer,bytesread); 
+      if (pfunc) {
+        bytesmod = pfunc(buffer,bytesread);
+      }
+      err = sendto(client_fd, &audio_chunk, sizeof(struct Datamsg), 0, (struct sockaddr*) addr, sizeof(struct sockaddr_in));
+      error_handling(err, "Error while sending audio chunk to client");
       write(client_fd, buffer, bytesmod);
-      bytesread = read(data_fd, buffer, BUFSIZE);
+      /* bytesread = read(data_fd, buffer, BUFSIZE); */
     }
   }
 
@@ -174,6 +197,9 @@ int main(int argc, char **argv) {
     // wait for connections
     // when a client connects, start streaming data (see the stream_data(...) prototype above)
     err = stream_data(fd, &addr, &addr_len);
+    if (err < 0) {
+      /* Error handling here, the server can continue running in case of error with a signle client */
+    }
     sleep(1);
   }
 
