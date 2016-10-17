@@ -25,7 +25,6 @@
 /// a define used for the copy buffer in stream_data(...)
 /* #define BUFSIZE 1024 */
 #define PORT 1234
-#define WAITING_TIME 1
 #define error_handling(err, expr) ( (err) < 0 ? fprintf(stderr, expr ": %s\n", strerror(errno)), exit(EXIT_FAILURE): 0)
 
 static int breakloop = 0;	///< use this variable to stop your wait-loop. Occasionally check its value, !1 signals that the program should close
@@ -43,25 +42,12 @@ void set_socket(struct sockaddr_in *addr) {
   addr->sin_addr.s_addr = htonl(INADDR_ANY);
 }
 
-int wait_for_client(fd_set *set, int fd) {
-  /* Waits indefinetely for a client to connect */
+int wait_for_response(fd_set *set, int fd) {
+  /* Initializing the read set used by the select function to monitor the sockets */
   FD_ZERO(set);
   FD_SET(fd, set);
   return select(fd+1, set, NULL, NULL, NULL);
 }
-
-int wait_for_response(fd_set *set, int fd, struct timeval *t) {
-  /* Initializing the read set used by the select function to monitor the sockets */
-  FD_ZERO(set);
-  FD_SET(fd, set);
-  t->tv_sec = WAITING_TIME;
-  t->tv_usec = 0;
-  return select(fd+1, set, NULL, NULL, t);
-}
-
-int resend_lost_packets() {
-}
-
 
 /// stream data to a client. 
 ///
@@ -70,13 +56,11 @@ int resend_lost_packets() {
 /// @param fd an opened file descriptor for reading and writing
 /// @return returns 0 on success or a negative errorcode on failure
 int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
-  int data_fd, err, acknowledgement;
+  int data_fd, err;
   int channels, sample_size, sample_rate;
   server_filterfunc pfunc;
   char *datafile, *libfile;
   char buffer[BUFSIZE];
-  fd_set read_set;
-  struct timeval timeout;
   struct Firstmsg msg;  // To store the first received msg contining the file and library paths.
   struct Audioconf conf;  // To store the configuaration of the audio file to be sent.
   struct Datamsg audio_chunk;  // To store the chuks of the audio stream.
@@ -132,15 +116,20 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
   conf.audio_size = sample_size;
   conf.audio_rate = sample_rate;
   conf.error = SUCCESS;
-  // Send Audioconf packet back to client in order to inform on how to play the streamed data.
   err = sendto(client_fd, &conf, sizeof(struct Audioconf), 0, (struct sockaddr*) addr, sizeof(struct sockaddr_in));
   error_handling(err, "Error while sending audio configuration datagram");
   // TO IMPLEMENT : optionally return an error code to the client if initialization went wrong
 
+  // Send Audioconf packet back to client in order to inform on how to play the streamed data.
 
   // start streaming
   {
     int bytesread, bytesmod, i = 0;
+
+    // to remove
+    int audio_fd;
+    audio_fd = aud_writeinit(sample_rate, sample_size, channels);
+		
     /* bytesread = read(data_fd, buffer, BUFSIZE); */
     while ( (bytesread = read(data_fd, audio_chunk.buffer, BUFSIZE)) > 0){
       i++;
@@ -151,27 +140,17 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
       audio_chunk.msg_counter = i;
       // edit data in-place. Not necessarily the best option
       if (pfunc) {
-        bytesmod = pfunc(audio_chunk. buffer, bytesread);
+        bytesmod = pfunc(buffer,bytesread);
       }
-      err = sendto(client_fd, &audio_chunk, sizeof(struct Datamsg), 0, (struct sockaddr*) addr, sizeof(struct sockaddr_in));
-      error_handling(err, "Error while sending audio chunk to client");
-      // resend lost packets
-      err = wait_for_response(&read_set, client_fd, &timeout);
-      error_handling(err, "Error while monitoring file descriptors");
-      if (err == 0) {
-        // resending packet since no acknowledgement received
-        err = sendto(client_fd, &audio_chunk, sizeof(struct Datamsg), 0, (struct sockaddr*) addr, sizeof(struct sockaddr_in));
-        error_handling(err, "Error while sending audio chunk to client");
-      } else {
-        // resending packet since acknowledgement doesn't match packet number.
-        err = recvfrom(client_fd, &acknowledgement, (size_t) sizeof(acknowledgement), 0,
-                       (struct sockaddr*) addr, addr_len);
-        error_handling(err, "Error while receiving acknowledgement");
-        if (ackowledgement != audio_chunk.msg_counter){
-          err = sendto(client_fd, &audio_chunk, sizeof(struct Datamsg), 0, (struct sockaddr*) addr, sizeof(struct sockaddr_in));
-          error_handling(err, "Error while sending audio chunk to client");
-        }
+      //  to remove
+      write(audio_fd, audio_chunk.buffer, audio_chunk.length);
+
+      if (audio_chunk.endflag == LAST_CHUNK) {
+        break;
       }
+      /* err = sendto(client_fd, &audio_chunk, sizeof(struct Datamsg), 0, (struct sockaddr*) addr, sizeof(struct sockaddr_in)); */
+      /* error_handling(err, "Error while sending audio chunk to client"); */
+      
       /* write(client_fd, buffer, bytesmod); */  //  equivalent to send() without flags. it can be used instead of sendto() since the socket is already conncted
       /* bytesread = read(data_fd, buffer, BUFSIZE); */
     }
@@ -223,7 +202,7 @@ int main(int argc, char **argv) {
   err = bind(fd, (struct sockaddr *) &addr, sizeof(struct sockaddr_in));
   error_handling(err, "Error while binding the socket");
   while (!breakloop) {
-    err = wait_for_client(&read_set, fd);
+    err = wait_for_response(&read_set, fd);
     error_handling(err, "Error while monitoring file descriptors");
     // TO IMPLEMENT:
     // wait for connections
