@@ -23,6 +23,7 @@
 #define WRONG_PACKETS_LIMIT 5
 #define NO_RESPONSE_LIMIT 5
 #define error_handling(err, expr) ( (err) < 0 ? fprintf(stderr, expr ": %s\n", strerror(errno)), exit(EXIT_FAILURE): 0)
+#define printf_error_handling(err) ( (err) < 0 ? fprintf(stderr, "Error while printing to standard output.\n"), exit(EXIT_FAILURE) : 0)
 
 static int breakloop = 0;	///< use this variable to stop your wait-loop. Occasionally check its value, !1 signals that the program should close
 
@@ -35,7 +36,7 @@ void parse_arguments(int argc, char *prog) {
 
 void initialize_firstmsg(struct Firstmsg *m, int argc, char **argv) {
   strncpy(m->filename, argv[2], NAME_MAX);
-  if(argc == 4) {
+  if (argc == 4) {
     strncpy(m->libfile, argv[3], NAME_MAX);
   }
 }
@@ -76,18 +77,21 @@ int wait_for_response(fd_set *set, int fd, struct timeval *t) {
 
 /// unimportant: the signal handler. This function gets called when Ctrl^C is pressed
 void sigint_handler(int sigint) {
+  int err;
   if (!breakloop) {
     breakloop = 1;
-    printf("SIGINT catched. Please wait to let the client close gracefully.\nTo close hard press Ctrl^C again.\n");
+    err = printf("SIGINT catched. Please wait to let the client close gracefully.\nTo close hard press Ctrl^C again.\n");
+    printf_error_handling(err);
   } else {
-    printf("SIGINT occurred, exiting hard... please wait\n");
-    exit(-1);
+    err = printf("SIGINT occurred, exiting hard... please wait\n");
+    printf_error_handling(err);
+    exit(EXIT_FAILURE);
   }
 }
 
 int main(int argc, char **argv) {
+  parse_arguments(argc, argv[0]);
   int server_fd, audio_fd, err, end_of_data = STILL_READING_FILE;
-  /* int sample_size, sample_rate, channels; */
   client_filterfunc pfunc;
   char buffer[BUFSIZE];
   struct timeval timeout;
@@ -98,45 +102,46 @@ int main(int argc, char **argv) {
   struct sockaddr_in dest;
   struct in_addr *addr;
   socklen_t dest_len = sizeof(struct sockaddr_in);
-
-  printf("SysProg2006 network client\n");
-  printf("handed in by VOORBEELDSTUDENT\n");
+  err = printf("SysProg2006 network client\nhanded in by Dimitri Diomaiuta\n");
+  printf_error_handling(err);
   signal(SIGINT, sigint_handler);  // trap Ctrl^C signals
-  parse_arguments(argc, argv[0]);
   addr = get_IP(argv[1]);
   initialize_firstmsg(&msg, argc, argv);
   server_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
   error_handling(server_fd, "Error while creating the socket");
   printf("The socket was created\n");  // to remove
-  // Destination server values initialization.
+  /* Destination server values initialization. */
   set_dest(&dest, addr);
   err = sendto(server_fd, &msg, sizeof(struct Firstmsg), 0, (struct sockaddr*) &dest, sizeof(struct sockaddr_in));
-  error_handling(err, "Error while sending datagram to host");
+  error_handling(err, "Error while sending first datagram to host");
   printf("First packet with path sent.\n");  // to remove
-  printf("This the msg.filename: %s.", msg.filename);
+  printf("This the msg.filename: %s.", msg.filename);  // to remove
   // No need to select since we can assume that the first packet is not lost
   err = recvfrom(server_fd, &conf, (size_t) sizeof(conf), 0, (struct sockaddr*) &dest, &dest_len);
+  error_handling(err, "Error while receiving audio configuration datagram");
   check_conf_error(&conf);  // in the case file or lib were not found.
   // open output
   audio_fd = aud_writeinit(conf.audio_rate, conf.audio_size, conf.channels);
-  error_handling(audio_fd, "Error: unable to open audio output.");
+  error_handling(audio_fd, "Error while opening/finding audio output device.");
   // open the library on the clientside if one is requested
   if (argv[3] && strcmp(argv[3], "")) {
     // try to open the library, if one is requested
     pfunc = NULL;
     if (!pfunc){
-      printf("failed to open the requested library. breaking hard\n");
+      fprintf(stderr, "failed to open the requested library. breaking hard\n");
       return -1;
     }
-    printf("opened libraryfile %s\n", argv[3]);
+    err = printf("opened libraryfile %s\n", argv[3]);
+    printf_error_handling(err);
   } else {
     pfunc = NULL;
-    printf("not using a filter\n");
+    err = printf("not using a filter\n");
+    printf_error_handling(err);
   }
   int bytesread, bytesmod, j = 0, timeoutcounter;
   unsigned int i = 0;
   char *modbuffer;
-  printf("Before while loop for reading data\n");
+  printf("Before while loop for reading data\n");  // to remove
   // start receiving
   {
     int bytesread, bytesmod, flag, len = BUFSIZE;
@@ -156,33 +161,38 @@ int main(int argc, char **argv) {
         // receive datamessage from server
         bytesread = recvfrom(server_fd, &audio_chunk,
                              sizeof(struct Datamsg), 0, (struct sockaddr*) &dest, &dest_len);
+        error_handling(bytesread, "Error while receiving audio chunk");
         //send acknowledgement packet
         err = sendto(server_fd, &audio_chunk.msg_counter, sizeof(audio_chunk.msg_counter),
                      0, (struct sockaddr*) &dest, sizeof(struct sockaddr_in));   
-          
-        //check for end of soundfile and close server if so
+        error_handling(err, "Error while sending acknowledgement");
         len = audio_chunk.length;
         if(audio_chunk.msg_counter == expected_chunk_no) {
-          write(audio_fd, audio_chunk.buffer, audio_chunk.length);
+          err = write(audio_fd, audio_chunk.buffer, audio_chunk.length);
+          error_handling(err, "Error while writing to audio device");
           expected_chunk_no++;
           wrong_packets = 0;
         } else if (wrong_packets < WRONG_PACKETS_LIMIT) {
           wrong_packets++;
-          printf("Wrong packet increased\nnow is: %d\n", wrong_packets);
+          printf("Wrong packet increased\nnow is: %d\n", wrong_packets);  // to remove
         } else {
           fprintf(stderr, "The server is not sending packets in sequence, Aborting.\n");
           return -1;
         }
-        printf("Dio cane questa e' la lunghezza dei cazzo di chunk di merda: %d\n", audio_chunk.length);
-        printf("E questa il fottuto counter del chunk dio madonna puttana: %d\n", audio_chunk.msg_counter);
+        printf("Dio cane questa e' la lunghezza dei cazzo di chunk di merda: %d\n", audio_chunk.length);  // to remove
+        printf("E questa il fottuto counter del chunk dio madonna puttana: %d\n", audio_chunk.msg_counter);  // to remove
       }
     }
-    printf("The file has been played.\n");
-    // check closing errors.
-    if (audio_fd >= 0)    
-      close(audio_fd);
-    if (server_fd >= 0)
-      close(server_fd);
+    err = printf("The file has been played. Exiting.\n");
+    printf_error_handling(err);
+    if (audio_fd >= 0) {
+      err = close(audio_fd);
+      error_handling(err, "Error while closing the audio file");
+    }
+    if (server_fd >= 0) {
+      err = close(server_fd);
+      error_handling(err, "Error while closing the socket");
+    }
     return 0;
   }
 }

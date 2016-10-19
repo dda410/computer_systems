@@ -25,7 +25,6 @@
 #define error_handling(err, expr) ( (err) < 0 ? fprintf(stderr, expr ": %s\n", strerror(errno)), exit(EXIT_FAILURE): 0)
 #define printf_error_handling(err) ( (err) < 0 ? fprintf(stderr, "Error while printing to standard output.\n"), exit(EXIT_FAILURE) : 0)
 
-
 static int breakloop = 0;  //< use this variable to stop your wait-loop. Occasionally check its value, !1 signals that the program should close
 
 void parse_arguments(int argc) {
@@ -98,9 +97,9 @@ int resend_lost_packet(fd_set *set, int fd, struct timeval *t,
                    (struct sockaddr*) addr, sizeof(struct sockaddr_in));
       error_handling(err, "Error while resending the audio chunk");
     }
-    int err = wait_for_response(set, fd, t);
+    err = wait_for_response(set, fd, t);
     error_handling(err, "Error while monitoring file descriptors");
-    if (err != 0) {
+    if (err > 0) {
       return 0;
     }
     return -1;
@@ -116,7 +115,8 @@ int resend_right_packet(int fd, struct Datamsg *m, struct timeval *t, socklen_t 
                    (struct sockaddr*) addr, sizeof(struct sockaddr_in));
       error_handling(err, "Error while sending the audio chunk");
       err = wait_for_response(set, fd, t);
-      if (err != 0) {
+      error_handling(err, "Error while monitoring file descriptors");
+      if (err > 0) {
         err = recvfrom(fd, &a, sizeof(a), 0,
                        (struct sockaddr*) addr, a_len);
         error_handling(err, "Error while receiving acknowledgement");
