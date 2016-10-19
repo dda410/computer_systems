@@ -91,9 +91,8 @@ void sigint_handler(int sigint) {
 
 int main(int argc, char **argv) {
   parse_arguments(argc, argv[0]);
-  int server_fd, audio_fd, err, end_of_data = STILL_READING_FILE;
+  int server_fd, audio_fd, err;
   client_filterfunc pfunc;
-  char buffer[BUFSIZE];
   struct timeval timeout;
   fd_set read_set;
   struct Firstmsg msg;  // To store the first received msg contining the file and library paths.
@@ -138,16 +137,11 @@ int main(int argc, char **argv) {
     err = printf("not using a filter\n");
     printf_error_handling(err);
   }
-  int bytesread, bytesmod, j = 0, timeoutcounter;
-  unsigned int i = 0;
-  char *modbuffer;
   printf("Before while loop for reading data\n");  // to remove
   // start receiving
   {
-    int bytesread, bytesmod, flag, len = BUFSIZE;
-    unsigned int x = 1; //  to remove
+    int bytesread, len = BUFSIZE;
     unsigned int expected_chunk_no = 1, wrong_packets = 0, no_response = 0;
-    char *modbuffer;
     while (len >= BUFSIZE) {
       err = wait_for_response(&read_set, server_fd, &timeout);
       error_handling(err, "Error while monitoring file descriptors");

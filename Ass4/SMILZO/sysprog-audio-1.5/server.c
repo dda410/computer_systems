@@ -88,7 +88,7 @@ void configure_audio(struct Audioconf *c, int ch, int ss, int sr) {
 }
 
 int resend_lost_packet(fd_set *set, int fd, struct timeval *t,
-                       struct Datamsg *m, struct sockaddr *addr) {
+                       struct Datamsg *m, struct sockaddr_in *addr) {
   int i, err;
   for (i = 0; i < RESEND_PACKET_LIMIT; i++) {
     printf("Inside for loop %d\n", i);
@@ -102,12 +102,12 @@ int resend_lost_packet(fd_set *set, int fd, struct timeval *t,
     if (err > 0) {
       return 0;
     }
-    return -1;
   }
+  return -1;
 }
 
 int resend_right_packet(int fd, struct Datamsg *m, struct timeval *t, socklen_t *a_len,
-                        unsigned int a, struct sockaddr *addr, fd_set *set) {
+                        unsigned int a, struct sockaddr_in *addr, fd_set *set) {
   int i, err;
   if (m->msg_counter != a) {
     for (i = 0; i < RESEND_PACKET_LIMIT; i++) {
@@ -133,10 +133,10 @@ int resend_right_packet(int fd, struct Datamsg *m, struct timeval *t, socklen_t 
 /// @param fd an opened file descriptor for reading and writing
 /// @return returns 0 on success or a negative errorcode on failure
 int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
-  int data_fd, err, nb;
+  int data_fd, err;
   int channels, sample_size, sample_rate;
   server_filterfunc pfunc;
-  char *datafile, *libfile, *em;
+  char *datafile, *libfile;
   fd_set read_set;
   struct timeval timeout;
   struct Firstmsg msg;  // To store filepath and libpath.
@@ -185,7 +185,7 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
   error_handling(err, "Error while sending audio configuration datagram");
   // start streaming
   {
-    int bytesread, bytesmod, flag = 1, timeoutcounter;
+    int bytesread;
     unsigned int counter;
     audio_chunk.msg_counter = 0;
     while ((bytesread = read(data_fd, audio_chunk.buffer, sizeof(audio_chunk.buffer))) > 0) {
@@ -203,7 +203,7 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
         return -1;
       }
       if (FD_ISSET(client_fd, &read_set)) {
-        err = recvfrom(client_fd, &counter, sizeof(flag), 0,
+        err = recvfrom(client_fd, &counter, sizeof(counter), 0,
                        (struct sockaddr*) addr, addr_len);
         error_handling(err, "Error while receiving the acknowledgement");
         printf("This is the counter: %d\n", counter);  // to remove

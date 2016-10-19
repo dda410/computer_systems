@@ -11,8 +11,6 @@
 #define SUCCESS 0
 #define AUDIO_FILE_NOT_FOUND -1
 #define LIB_NOT_FOUND -2
-#define LAST_CHUNK 0
-#define STILL_READING_FILE 1
 
 struct Firstmsg {
   char filename[NAME_MAX+1];  // plus one since NAME_MAX doesn't contain '\0'
