@@ -14,8 +14,8 @@
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "library.h"
 #include "audio.h"
+#include "library.h"
 #include "msg.h"
 
 #define DEST_PORT 1234
@@ -128,7 +128,7 @@ int main(int argc, char **argv) {
       printf("failed to open the requested library. breaking hard\n");
       return -1;
     }
-    printf("opened libraryfile %s\n",argv[3]);
+    printf("opened libraryfile %s\n", argv[3]);
   } else {
     pfunc = NULL;
     printf("not using a filter\n");
