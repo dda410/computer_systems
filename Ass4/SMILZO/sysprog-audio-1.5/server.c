@@ -196,7 +196,7 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
       error_handling(err, "Error while sending the audio chunk");
       err = resend_lost_packet(&read_set, client_fd, &timeout, &audio_chunk, addr);
       if (err < 0) {
-        printf("The client stopped responding. Closing connection...\n");
+        err = printf("The client stopped responding. Closing connection...\n");
         printf_error_handling(err);
         err = close(data_fd);
         error_handling(err, "Error closing the audio file");
