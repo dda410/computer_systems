@@ -231,7 +231,7 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
         err = resend_right_packet(client_fd, &audio_chunk,
                                   &timeout, addr_len, counter, addr, &read_set, data_fd);
         if (err < 0) {
-          printf("The client stopped sending the right acknowledgement. Closing connection...\n");
+          err = printf("The client stopped sending the right acknowledgement. Closing connection...\n");
           printf_error_handling(err);
           err = close(data_fd);
           error_handling(err, "Error closing the audio file");
