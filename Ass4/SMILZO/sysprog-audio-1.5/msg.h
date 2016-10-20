@@ -27,8 +27,4 @@ struct Datamsg {
   unsigned int msg_counter;
 };
 
-struct Acknowledgemnt {
-  int ack;
-};
-
 #endif
