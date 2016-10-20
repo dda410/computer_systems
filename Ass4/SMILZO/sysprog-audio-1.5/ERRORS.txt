@@ -1,0 +1,17 @@
+This is the counter: 2227
+This the msg_counter: 2227
+This is the acknowledgement no: 2227
+Inside for loop 0
+This is the counter: 757085488
+This the msg_counter: 2228
+The client stopped sending the right acknowledgement. Closing connection...
+
+This is the counter: 26599
+This the msg_counter: 26599
+This is the acknowledgement no: 26599
+Inside for loop 0
+This is the counter: 757084721
+This the msg_counter: 26600
+
+
+

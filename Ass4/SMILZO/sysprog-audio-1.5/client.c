@@ -92,6 +92,9 @@ void check_conf_error(struct Audioconf *c) {
   } else if (c->error == LIB_NOT_FOUND) {
     fprintf(stderr, "The input library was not found\n");
     exit(EXIT_FAILURE);
+  } else if (c->error != SUCCESS) {
+    fprintf(stderr, "The server is already serving another client. Aborting.\n");
+    exit(EXIT_FAILURE);
   }
 }
 
