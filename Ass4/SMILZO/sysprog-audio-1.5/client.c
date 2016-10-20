@@ -22,6 +22,7 @@
 #define WAITING_TIME 1
 #define WRONG_PACKETS_LIMIT 5
 #define NO_RESPONSE_LIMIT 5
+#define NO_AUDIO_FILE -1
 #define error_handling(err, expr) ( (err) < 0 ? fprintf(stderr, expr ": %s\n", strerror(errno)), exit(EXIT_FAILURE): 0)
 #define printf_error_handling(err) ( (err) < 0 ? fprintf(stderr, "Error while printing to standard output.\n"), exit(EXIT_FAILURE) : 0)
 
@@ -98,6 +99,18 @@ void check_conf_error(struct Audioconf *c) {
   }
 }
 
+int wait_for_server(fd_set *set, int fd) {
+  /* Waits indefinetely for a server to answer */
+  int err;
+  FD_ZERO(set);
+  FD_SET(fd, set);
+  err = select(fd+1, set, NULL, NULL, NULL);
+  if (err < 0 && breakloop != 0) {
+    close_after_interrupt(fd, NO_AUDIO_FILE);
+  }
+  return err;
+}
+
 int wait_for_response(fd_set *set, int fd, struct timeval *t, int device) {
   /* Initializing the read set used by the select function to monitor the sockets */
   int err;
@@ -139,7 +152,8 @@ int main(int argc, char **argv) {
   error_handling(err, "Error while sending first datagram to host");
   printf("First packet with path sent.\n");  // to remove
   printf("This the msg.filename: %s.", msg.filename);  // to remove
-  // No need to select since we can assume that the first packet is not lost
+  err = wait_for_server(&read_set, server_fd);
+  error_handling(err, "Error while monitoring file descriptors");
   err = recvfrom(server_fd, &conf, (size_t) sizeof(conf), 0, (struct sockaddr*) &dest, &dest_len);
   error_handling(err, "Error while receiving audio configuration datagram");
   check_conf_error(&conf);  // in the case file or lib were not found.
