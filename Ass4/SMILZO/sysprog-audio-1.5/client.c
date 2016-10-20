@@ -34,6 +34,35 @@ void parse_arguments(int argc, char *prog) {
   }
 }
 
+// unimportant: the signal handler. This function gets called when Ctrl^C is pressed
+void sigint_handler(int sigint) {
+  int err;
+  if (!breakloop) {
+    breakloop = 1;
+    err = printf("SIGINT catched. Please wait to let the client close gracefully.\nTo close hard press Ctrl^C again.\n");
+    printf_error_handling(err);
+  } else {
+    err = printf("SIGINT occurred, exiting hard... please wait\n");
+    printf_error_handling(err);
+    exit(EXIT_FAILURE);
+  }
+}
+
+void close_after_interrupt(int sock, int device) {
+  int err;
+  if (sock >= 0) {
+    err = close(sock);
+    error_handling(err, "Error while closing the socket");
+  }
+  if (device >= 0) {
+    err = close(device);
+    error_handling(err, "Error while closing the audio file");
+  }
+  err = printf("The program has been closed gracefully.\n");
+  printf_error_handling(err);
+  exit(EXIT_SUCCESS);
+}
+
 void initialize_firstmsg(struct Firstmsg *m, int argc, char **argv) {
   strncpy(m->filename, argv[2], NAME_MAX);
   if (argc == 4) {
@@ -66,27 +95,19 @@ void check_conf_error(struct Audioconf *c) {
   }
 }
 
-int wait_for_response(fd_set *set, int fd, struct timeval *t) {
+int wait_for_response(fd_set *set, int fd, struct timeval *t, int device) {
   /* Initializing the read set used by the select function to monitor the sockets */
+  int err;
   FD_ZERO(set);
   FD_SET(fd, set);
   t->tv_sec = WAITING_TIME;
   t->tv_usec = 0;
-  return select(fd+1, set, NULL, NULL, t);
-}
-
-/// unimportant: the signal handler. This function gets called when Ctrl^C is pressed
-void sigint_handler(int sigint) {
-  int err;
-  if (!breakloop) {
-    breakloop = 1;
-    err = printf("SIGINT catched. Please wait to let the client close gracefully.\nTo close hard press Ctrl^C again.\n");
-    printf_error_handling(err);
-  } else {
-    err = printf("SIGINT occurred, exiting hard... please wait\n");
-    printf_error_handling(err);
-    exit(EXIT_FAILURE);
+  err = select(fd+1, set, NULL, NULL, t);
+  /* In the case the user ctrl-c while waiting for a response */
+  if (err < 0 && breakloop != 0) {
+    close_after_interrupt(fd, device);
   }
+  return err;
 }
 
 int main(int argc, char **argv) {
@@ -143,7 +164,10 @@ int main(int argc, char **argv) {
     int bytesread, len = BUFSIZE;
     unsigned int expected_chunk_no = 1, wrong_packets = 0, no_response = 0;
     while (len >= BUFSIZE) {
-      err = wait_for_response(&read_set, server_fd, &timeout);
+      if (breakloop != 0) {
+        close_after_interrupt(server_fd, audio_fd);
+      }
+      err = wait_for_response(&read_set, server_fd, &timeout, audio_fd);
       error_handling(err, "Error while monitoring file descriptors");
       if (err == 0) {
         no_response++;
@@ -179,14 +203,10 @@ int main(int argc, char **argv) {
     }
     err = printf("The file has been played. Exiting.\n");
     printf_error_handling(err);
-    if (audio_fd >= 0) {
-      err = close(audio_fd);
-      error_handling(err, "Error while closing the audio file");
-    }
-    if (server_fd >= 0) {
-      err = close(server_fd);
-      error_handling(err, "Error while closing the socket");
-    }
+    err = close(audio_fd);
+    error_handling(err, "Error while closing the audio file");
+    err = close(server_fd);
+    error_handling(err, "Error while closing the socket");
     return 0;
   }
 }

@@ -20,8 +20,8 @@
 
 #define PORT 1234
 #define WAITING_TIME 1
-#define RESEND_PACKET_LIMIT 10
-#define CLIENT_NOT_RESPONDING -1
+#define RESEND_PACKET_LIMIT 5
+#define NO_AUDIO_FILE -1
 #define error_handling(err, expr) ( (err) < 0 ? fprintf(stderr, expr ": %s\n", strerror(errno)), exit(EXIT_FAILURE): 0)
 #define printf_error_handling(err) ( (err) < 0 ? fprintf(stderr, "Error while printing to standard output.\n"), exit(EXIT_FAILURE) : 0)
 
@@ -49,6 +49,21 @@ void sigint_handler(int sigint) {
   }
 }
 
+void close_after_interrupt(int sock, int file) {
+  int err;
+  if (sock >= 0) {
+    err = close(sock);
+    error_handling(err, "Error while closing the socket");
+  }
+  if (file >= 0) {
+    err = close(file);
+    error_handling(err, "Error while closing the audio file");
+  }
+  err = printf("The program has been closed gracefully.\n");
+  printf_error_handling(err);
+  exit(EXIT_SUCCESS);
+}
+
 void set_socket(struct sockaddr_in *addr) {
   addr->sin_family = AF_INET;
   addr->sin_port = htons(PORT);
@@ -62,13 +77,19 @@ int wait_for_client(fd_set *set, int fd) {
   return select(fd+1, set, NULL, NULL, NULL);
 }
 
-int wait_for_response(fd_set *set, int fd, struct timeval *t) {
+int wait_for_response(fd_set *set, int fd, struct timeval *t, int file) {
   /* Initializing the read set used by the select function to monitor the sockets */
+  int err;
   FD_ZERO(set);
   FD_SET(fd, set);
   t->tv_sec = WAITING_TIME;
   t->tv_usec = 0;
-  return select(fd+1, set, NULL, NULL, t);
+  err = select(fd+1, set, NULL, NULL, t);
+  /* In the case the user ctrl-c while waiting for a response */
+  if (err < 0 && breakloop != 0) {
+    close_after_interrupt(fd, file);
+  }
+  return err;
 }
 
 void send_error_to_client(int fd, int err, struct Audioconf *c,
@@ -88,7 +109,7 @@ void configure_audio(struct Audioconf *c, int ch, int ss, int sr) {
 }
 
 int resend_lost_packet(fd_set *set, int fd, struct timeval *t,
-                       struct Datamsg *m, struct sockaddr_in *addr) {
+                       struct Datamsg *m, struct sockaddr_in *addr, int file) {
   int i, err;
   for (i = 0; i < RESEND_PACKET_LIMIT; i++) {
     printf("Inside for loop %d\n", i);
@@ -97,7 +118,7 @@ int resend_lost_packet(fd_set *set, int fd, struct timeval *t,
                    (struct sockaddr*) addr, sizeof(struct sockaddr_in));
       error_handling(err, "Error while resending the audio chunk");
     }
-    err = wait_for_response(set, fd, t);
+    err = wait_for_response(set, fd, t, file);
     error_handling(err, "Error while monitoring file descriptors");
     if (err > 0) {
       return 0;
@@ -107,14 +128,14 @@ int resend_lost_packet(fd_set *set, int fd, struct timeval *t,
 }
 
 int resend_right_packet(int fd, struct Datamsg *m, struct timeval *t, socklen_t *a_len,
-                        unsigned int a, struct sockaddr_in *addr, fd_set *set) {
+                        unsigned int a, struct sockaddr_in *addr, fd_set *set, int file) {
   int i, err;
   if (m->msg_counter != a) {
     for (i = 0; i < RESEND_PACKET_LIMIT; i++) {
       err = sendto(fd, m, sizeof(struct Datamsg), 0,
                    (struct sockaddr*) addr, sizeof(struct sockaddr_in));
       error_handling(err, "Error while sending the audio chunk");
-      err = wait_for_response(set, fd, t);
+      err = wait_for_response(set, fd, t, file);
       error_handling(err, "Error while monitoring file descriptors");
       if (err > 0) {
         err = recvfrom(fd, &a, sizeof(a), 0,
@@ -142,7 +163,6 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
   struct Firstmsg msg;  // To store filepath and libpath.
   struct Audioconf conf;  // To store the audio configuration.
   struct Datamsg audio_chunk;  // To store the chuks of the audio file.
-
   err = recvfrom(client_fd, &msg, (size_t) sizeof(msg), 0,
                  (struct sockaddr*) addr, addr_len);
   error_handling(err, "Error while receiving first datagram");
@@ -194,7 +214,7 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
       err = sendto(client_fd, &audio_chunk, sizeof(struct Datamsg), 0,
                    (struct sockaddr*) addr, sizeof(struct sockaddr_in));
       error_handling(err, "Error while sending the audio chunk");
-      err = resend_lost_packet(&read_set, client_fd, &timeout, &audio_chunk, addr);
+      err = resend_lost_packet(&read_set, client_fd, &timeout, &audio_chunk, addr, data_fd);
       if (err < 0) {
         err = printf("The client stopped responding. Closing connection...\n");
         printf_error_handling(err);
@@ -209,7 +229,7 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
         printf("This is the counter: %d\n", counter);  // to remove
         printf("This the msg_counter: %d\n", audio_chunk.msg_counter);  // to remove
         err = resend_right_packet(client_fd, &audio_chunk,
-                                  &timeout, addr_len, counter, addr, &read_set);
+                                  &timeout, addr_len, counter, addr, &read_set, data_fd);
         if (err < 0) {
           printf("The client stopped sending the right acknowledgement. Closing connection...\n");
           printf_error_handling(err);
@@ -224,8 +244,8 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
     /* do not close client_fd since is the same file descriptor used for
      * other connections as well. it will be close once the server exits. */
     if (data_fd >= 0) {
-       err = close(data_fd);
-       error_handling(err, "Error closing the audio file");
+      err = close(data_fd);
+      error_handling(err, "Error closing the audio file");
     }
     return 0;
   }
@@ -252,8 +272,11 @@ int main(int argc, char **argv) {
   error_handling(err, "Error while binding the socket");
   while (!breakloop) {
     err = wait_for_client(&read_set, fd);
+    if (err < 0 && breakloop != 0) {
+      close_after_interrupt(fd, NO_AUDIO_FILE);
+    }
     error_handling(err, "Error while monitoring file descriptors");
-    /* Streaming the requested file when a client connects */
+    /* open connection when client connects and start streaming */
     err = stream_data(fd, &addr, &addr_len);
     if (err < 0) {
       err = printf("Connection with client closed due to errors.Waiting for new requests\n");
@@ -264,7 +287,6 @@ int main(int argc, char **argv) {
     }
     sleep(1);
   }
-  // This should be put in the sigint function.
   err = close(fd);
   error_handling(err, "Error while closing the socket");
   return 0;
