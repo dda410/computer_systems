@@ -136,7 +136,7 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
   }
   err = printf("opened datafile %s\n", datafile);
   printf_error_handling(err);
-  printf("This the sample_rate: %d\nThis the sample_size: %d\nThis the channels: %d\n", sample_rate, sample_size, channels);  //  to remove
+  /* printf("This the sample_rate: %d\nThis the sample_size: %d\nThis the channels: %d\n", sample_rate, sample_size, channels);  //  to remove */
   /* optionally open a library if one is requested (next assignment) */
   if (libfile) {
     pfunc = NULL;
@@ -179,8 +179,8 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
                        (struct sockaddr*) addr, addr_len);
         error_handling(err, "Error while receiving the acknowledgement");
         wrong_ack = (audio_chunk.msg_counter == counter) ? 0 : wrong_ack + 1;
-        printf("This is the counter: %d\n", counter);  // to remove
-        printf("This the msg_counter: %d\n", audio_chunk.msg_counter);  // to remove        
+        /* printf("This is the counter: %d\n", counter);  // to remove */
+        /* printf("This the msg_counter: %d\n", audio_chunk.msg_counter);  // to remove         */
       }
       if (lost_packets > RESEND_PACKET_LIMIT || wrong_ack > RESEND_PACKET_LIMIT) {
         err = printf("Error while comunicating with client. Closing connection...\n");
@@ -192,8 +192,11 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
         bytesread = read(data_fd, audio_chunk.buffer, sizeof(audio_chunk.buffer));
         audio_chunk.msg_counter+=1;
         audio_chunk.length = bytesread;
+      } else {
+        err = printf("Resending packet to client...\n");
+        printf_error_handling(err);
       }
-      printf("This is the wrong ack val: %u\n", wrong_ack);  // to remove
+      /* printf("This is the wrong ack val: %u\n", wrong_ack);  // to remove */
     }
     error_handling(bytesread, "Error while reading the file");
     /* do not close client_fd since the same file descriptor is used for

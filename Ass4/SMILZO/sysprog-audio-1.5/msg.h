@@ -23,7 +23,7 @@ struct Audioconf {
 
 struct __attribute__((packed)) Datamsg {
   char buffer[BUFSIZE];
-  int length;  // before eliminate endflag no padding should be added
+  int length;
   unsigned int msg_counter;
 };
 
