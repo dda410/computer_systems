@@ -227,8 +227,35 @@ following errors occur:
 The client stops and exits when one of the following errors occur:
     	  1. The server stops responding.
 	  2. The server stops sending the packages in sequence.
+	  3. The server is already serving another client.
 
 The client and server won't stop connection immediately but will retry
 to send the right packet/acknowledgment a number of times. How many
 times this will be retried is defined by individual macros both in
 server and client.
+
+
+Interrupt handling
+~~~~~~~~~~~~~~~~~~
+
+Both the server and the client support interrupt handling by ctrl-c in
+every moment in order to close the program. When pressed ctrl-c a
+first time the breakloop variable will change to 1. This value is
+checked constantly by both program. In the case breakloop == 1 then
+the programs will call a close_after_interrupt() function that will
+close any open socket and file and then will exit the program.
+
+
+Testing
+~~~~~~~
+
+In order to test the client/server programs on multiple files a bunch
+of (LPCM).wav files were put in the same directory. After running the
+server the client was executed by the following inline bash script:
+----------------------------------------------------------------------------------
+for file in *.wav; do padsp ./client localhost "$file" 1>/dev/null; sleep 1s; done
+----------------------------------------------------------------------------------
+It makes the client request for every .wav audio file in the
+directory. The standard output is redirected to the null devices in
+order to display messages just in case of errors.
+
