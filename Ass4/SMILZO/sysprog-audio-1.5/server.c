@@ -108,51 +108,6 @@ void configure_audio(struct Audioconf *c, int ch, int ss, int sr) {
   c->error = SUCCESS;
 }
 
-/* A packet is resent to client in case of loss.
- * @return returns -1 if client not responding anymore */
-int resend_lost_packet(fd_set *set, int fd, struct timeval *t,
-                       struct Datamsg *m, struct sockaddr_in *addr, int file) {
-  int i, err;
-  for (i = 0; i < RESEND_PACKET_LIMIT; i++) {
-    printf("Inside for loop %d\n", i);
-    if (i > 0) {
-      err = sendto(fd, m, sizeof(struct Datamsg), 0,
-                   (struct sockaddr*) addr, sizeof(struct sockaddr_in));
-      error_handling(err, "Error while resending the audio chunk");
-    }
-    err = wait_for_response(set, fd, t, file);
-    error_handling(err, "Error while monitoring file descriptors");
-    if (err > 0) {
-      return 0;
-    }
-  }
-  return -1;
-}
-/* A packet is resent to client in case the wrong acknowledgement is received.
- * @return returns -1 if client not responding or keeping sending the wrong acknoledgement */
-int resend_right_packet(int fd, struct Datamsg *m, struct timeval *t, socklen_t *a_len,
-                        unsigned int a, struct sockaddr_in *addr, fd_set *set, int file) {
-  int i, err;
-  if (m->msg_counter != a) {
-    for (i = 0; i < RESEND_PACKET_LIMIT; i++) {
-      err = sendto(fd, m, sizeof(struct Datamsg), 0,
-                   (struct sockaddr*) addr, sizeof(struct sockaddr_in));
-      error_handling(err, "Error while sending the audio chunk");
-      err = wait_for_response(set, fd, t, file);
-      error_handling(err, "Error while monitoring file descriptors");
-      if (err > 0) {
-        err = recvfrom(fd, &a, sizeof(a), 0,
-                       (struct sockaddr*) addr, a_len);
-        error_handling(err, "Error while receiving acknowledgement");
-        if (m->msg_counter == a) {
-          return 0;
-        }
-      }
-    }
-    return -1;
-  }
-  return 0;
-}
 /* Streams readed chunks from the audio file to the client till it has been
  * completely read. @return returns 0 on success or a negative errorcode on failure */
 int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
@@ -206,42 +161,39 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
   /* start streaming content to client  */
   {
     int bytesread;
-    unsigned int counter;
-    audio_chunk.msg_counter = 0;
+    unsigned int counter, wrong_ack = 0, lost_packets = 0;
+    audio_chunk.msg_counter = 1;
     /* The loop stops when the file has been read completely */
-    while ((bytesread = read(data_fd, audio_chunk.buffer, sizeof(audio_chunk.buffer))) > 0) {
-      audio_chunk.msg_counter+=1;
-      audio_chunk.length = bytesread;
+    bytesread = read(data_fd, audio_chunk.buffer, sizeof(audio_chunk.buffer));
+    audio_chunk.length = bytesread;
+    while (bytesread > 0) {
       err = sendto(client_fd, &audio_chunk, sizeof(struct Datamsg), 0,
                    (struct sockaddr*) addr, sizeof(struct sockaddr_in));
       error_handling(err, "Error while sending the audio chunk");
-      err = resend_lost_packet(&read_set, client_fd,
-                               &timeout, &audio_chunk, addr, data_fd);
-      if (err < 0) {
-        err = printf("The client stopped responding. Closing connection...\n");
-        printf_error_handling(err);
-        err = close(data_fd);
-        error_handling(err, "Error closing the audio file");
-        return -1;
-      }
+      err = wait_for_response(&read_set, client_fd, &timeout, data_fd);
+      error_handling(err, "Error while monitoring file descriptors");
+      lost_packets = (err == 0) ? lost_packets + 1 : 0;
       if (FD_ISSET(client_fd, &read_set)) {
         /* Receive acknowledgement if no packet loss and client still active */
         err = recvfrom(client_fd, &counter, sizeof(counter), 0,
                        (struct sockaddr*) addr, addr_len);
         error_handling(err, "Error while receiving the acknowledgement");
+        wrong_ack = (audio_chunk.msg_counter == counter) ? 0 : wrong_ack + 1;
         printf("This is the counter: %d\n", counter);  // to remove
-        printf("This the msg_counter: %d\n", audio_chunk.msg_counter);  // to remove
-        err = resend_right_packet(client_fd, &audio_chunk, &timeout,
-                                  addr_len, counter, addr, &read_set, data_fd);
-        if (err < 0) {
-          err = printf("The client stopped responding or sending the right acknowledgement. Closing connection...\n");
-          printf_error_handling(err);
-          err = close(data_fd);
-          error_handling(err, "Error closing the audio file");
-          return -1;
-        }
+        printf("This the msg_counter: %d\n", audio_chunk.msg_counter);  // to remove        
       }
-      printf("This is the acknowledgement no: %u\n", counter);  // to remove
+      if (lost_packets > RESEND_PACKET_LIMIT || wrong_ack > RESEND_PACKET_LIMIT) {
+        err = printf("Error while comunicating with client. Closing connection...\n");
+        printf_error_handling(err);
+        err = close(data_fd);
+        error_handling(err, "Error closing the audio file");
+        return -1;
+      } else if (lost_packets == 0 && wrong_ack == 0) {
+        bytesread = read(data_fd, audio_chunk.buffer, sizeof(audio_chunk.buffer));
+        audio_chunk.msg_counter+=1;
+        audio_chunk.length = bytesread;
+      }
+      printf("This is the wrong ack val: %u\n", wrong_ack);  // to remove
     }
     error_handling(bytesread, "Error while reading the file");
     /* do not close client_fd since the same file descriptor is used for
@@ -281,7 +233,7 @@ int main(int argc, char **argv) {
     /* open connection when client connects and start streaming */
     err = stream_data(fd, &addr, &addr_len);
     if (err < 0) {
-      err = printf("Connection with client closed due to errors.Waiting for new requests\n");
+      err = printf("Connection with client closed due to errors. Waiting for new requests\n");
       printf_error_handling(err);
     } else {
       err = printf("The audio was succesfully sent to the client. Waiting for new requests\n");
