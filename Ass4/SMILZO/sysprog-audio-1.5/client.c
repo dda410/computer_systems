@@ -216,8 +216,6 @@ int main(int argc, char **argv) {
           fprintf(stderr, "The server is not sending packets in sequence, Aborting.\n");
           return -1;
         }
-        printf("Dio cane questa e' la lunghezza dei cazzo di chunk di merda: %d\n", audio_chunk.length);  // to remove
-        printf("E questa il fottuto counter del chunk dio madonna puttana: %d\n", audio_chunk.msg_counter);  // to remove
       }
     }
     err = printf("The file has been played. Exiting.\n");
