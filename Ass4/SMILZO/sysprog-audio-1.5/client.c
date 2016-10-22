@@ -26,7 +26,7 @@
 #define error_handling(err, expr) ( (err) < 0 ? fprintf(stderr, expr ": %s\n", strerror(errno)), exit(EXIT_FAILURE): 0)
 #define printf_error_handling(err) ( (err) < 0 ? fprintf(stderr, "Error while printing to standard output.\n"), exit(EXIT_FAILURE) : 0)
 
-static int breakloop = 0; // changes when interrupt is catched.
+static int breakloop = 0;  // changes when interrupt is catched.
 
 void parse_arguments(int argc, char *prog) {
   if (argc < 3 || argc > 4) {
@@ -149,13 +149,10 @@ int main(int argc, char **argv) {
   /* Creating the socket */
   server_fd = socket(AF_INET, SOCK_DGRAM, IPPROTO_UDP);
   error_handling(server_fd, "Error while creating the socket");
-  printf("The socket was created\n");  // to remove
   /* Initializing the destination server */
   set_dest(&dest, addr);
   err = sendto(server_fd, &msg, sizeof(struct Firstmsg), 0, (struct sockaddr*) &dest, sizeof(struct sockaddr_in));
   error_handling(err, "Error while sending first datagram to host");
-  printf("First packet with path sent.\n");  // to remove
-  printf("This the msg.filename: %s.", msg.filename);  // to remove
   err = wait_for_server(&read_set, server_fd);
   error_handling(err, "Error while monitoring file descriptors");
   err = recvfrom(server_fd, &conf, (size_t) sizeof(conf), 0, (struct sockaddr*) &dest, &dest_len);
@@ -178,7 +175,6 @@ int main(int argc, char **argv) {
     err = printf("not using a filter\n");
     printf_error_handling(err);
   }
-  printf("Before while loop for reading data\n");  // to remove
   /* Start receiving streamed content from the server */
   {
     int bytesread, len = BUFSIZE;
@@ -214,7 +210,8 @@ int main(int argc, char **argv) {
           wrong_packets = 0;
         } else if (wrong_packets < WRONG_PACKETS_LIMIT) {
           wrong_packets++;
-          printf("Wrong packet increased\nnow is: %d\n", wrong_packets);  // to remove
+          err = printf("Wrong packet received from server.\n");
+          printf_error_handling(err);
         } else {
           fprintf(stderr, "The server is not sending packets in sequence, Aborting.\n");
           return -1;
