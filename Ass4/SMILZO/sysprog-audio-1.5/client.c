@@ -69,6 +69,8 @@ void initialize_firstmsg(struct Firstmsg *m, int argc, char **argv) {
   strncpy(m->filename, argv[2], NAME_MAX);
   if (argc == 4) {
     strncpy(m->libfile, argv[3], NAME_MAX);
+  } else {
+    strncpy(m->libfile, NO_LIB_REQUESTED, NAME_MAX);
   }
 }
 

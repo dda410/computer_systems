@@ -124,7 +124,11 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
                  (struct sockaddr*) addr, addr_len);
   error_handling(err, "Error while receiving first datagram");
   datafile = msg.filename;
-  libfile = NULL;
+  if (strcmp(msg.libfile, NO_LIB_REQUESTED) == 0) {
+    libfile = NULL;
+  } else {
+    libfile = msg.libfile;
+  }
   /* Opening input audio file */
   data_fd = aud_readinit(datafile, &sample_rate, &sample_size, &channels);
   if (data_fd < 0) {
