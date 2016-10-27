@@ -1,7 +1,7 @@
 ###################### DEFS
 
 CC = gcc
-CFLAGS = -Wall
+CFLAGS = -Wall -Werror
 LDFLAGS = -ldl
 
 ###################### HELPERS
