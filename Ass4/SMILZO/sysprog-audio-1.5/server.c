@@ -194,10 +194,7 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
         bytesread = read(data_fd, audio_chunk.buffer, sizeof(audio_chunk.buffer));
         audio_chunk.msg_counter+=1;
         audio_chunk.length = bytesread;
-      } else {
-        err = printf("Resending packet to client...\n");
-        printf_error_handling(err);
-      }
+      } /* else the same packet will be resent to the client */
     }
     error_handling(bytesread, "Error while reading the file");
     /* client_fd is not close since the same file descriptor is used for

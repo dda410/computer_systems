@@ -211,9 +211,8 @@ int main(int argc, char **argv) {
           expected_chunk_no++;
           wrong_packets = 0;
         } else if (wrong_packets < WRONG_PACKETS_LIMIT) {
+          /* The client will wait for the server sending the right packet */
           wrong_packets++;
-          err = printf("Wrong packet received from server.\n");
-          printf_error_handling(err);
         } else {
           fprintf(stderr, "The server is not sending packets in sequence, Aborting.\n");
           return -1;
