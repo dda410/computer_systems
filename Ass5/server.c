@@ -142,7 +142,7 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
   printf_error_handling(err);
   /* optionally open a library if one is requested (next assignment) */
   if (libfile) {
-    filter = dlopen("/home/dimitri/Documents/Year3UNI/SystemsProgramming/Assignments/Ass5/libblank.so", RTLD_NOW);
+    filter = dlopen(libfile, RTLD_NOW);
     pfunc = dlsym(filter, "encode");
     if (!pfunc) {
       err = printf("failed to open the requested library. breaking hard\n");

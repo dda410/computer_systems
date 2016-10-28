@@ -23,13 +23,17 @@
 #define WRONG_PACKETS_LIMIT 5
 #define NO_RESPONSE_LIMIT 5
 #define NO_AUDIO_FILE -1
+#define MAX_OPTION_SIZE 11
+#define LIB_EXTENSION 3  // .so
+#define LIB_BEGINNING 3  // lib
+#define UNKNOWN_LIB "unknown"
 #define error_handling(err, expr) ( (err) < 0 ? fprintf(stderr, expr ": %s\n", strerror(errno)), exit(EXIT_FAILURE): 0)
 #define printf_error_handling(err) ( (err) < 0 ? fprintf(stderr, "Error while printing to standard output.\n"), exit(EXIT_FAILURE) : 0)
 
 static int breakloop = 0;  // changes when interrupt is catched.
 
 void parse_arguments(int argc, char *prog) {
-  if (argc < 3 || argc > 4) {
+  if (argc < 3 || argc > 5) {
     fprintf(stderr, "error : called with incorrect number of parameters\nusage : %s <server_name/IP> <filename> [<filter> [filter_options]]]\n", prog);
     exit(EXIT_FAILURE);
   }
@@ -68,7 +72,21 @@ void close_after_interrupt(int sock, int device) {
 void initialize_firstmsg(struct Firstmsg *m, int argc, char **argv) {
   strncpy(m->filename, argv[2], NAME_MAX);
   if (argc == 4) {
-    strncpy(m->libfile, argv[3], NAME_MAX);
+    strncpy(m->libfile, argv[3], NAME_MAX-6);
+    strncpy(m->libfile, ( (strcmp(m->libfile, "blank") == 0) ?
+                          "libblank.so" : UNKNOWN_LIB), NAME_MAX);
+  } else if (argc == 5) {
+    printf("INside argc == 5\n");
+    char option[MAX_OPTION_SIZE + 1];
+    strncpy(m->libfile, argv[3], NAME_MAX - LIB_EXTENSION - LIB_BEGINNING);
+     printf("%s\n", m->libfile);
+    strncpy(option, argv[4], MAX_OPTION_SIZE);
+    printf("This is option: %s\n", option);
+    strncpy(m->libfile, ( ((strcmp(m->libfile, "vol") == 0)  &&
+                           (strcmp(option, "--increase") == 0)) ? "libvolup.so" :
+                          ((strcmp(m->libfile, "vol") == 0)  && (strcmp(option, "--decrease") == 0)) ?
+                          "libvoldown.so" : UNKNOWN_LIB), NAME_MAX);
+    printf("%s\n", m->libfile);
   } else {
     strncpy(m->libfile, NO_LIB_REQUESTED, NAME_MAX);
   }
@@ -167,9 +185,8 @@ int main(int argc, char **argv) {
   error_handling(audio_fd, "Error while opening/finding audio output device.");
   /* open the library on the clientside if one is requested (next assignment) */
   if (argv[3]) {
-    filt = dlopen("/home/dimitri/Documents/Year3UNI/SystemsProgramming/Assignments/Ass5/libblank.so", RTLD_NOW);
+    filt = dlopen(msg.libfile, RTLD_NOW);
     if (!filt) {
-      printf("The filter is null dio cane\n");
       printf("Symbol error: %s\n", dlerror());
     }
     pfunc = dlsym(filt, "decode");
