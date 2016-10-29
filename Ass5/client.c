@@ -23,7 +23,7 @@
 #define WRONG_PACKETS_LIMIT 5
 #define NO_RESPONSE_LIMIT 5
 #define NO_AUDIO_FILE -1
-#define MAX_OPTION_SIZE 11
+#define MAX_OPTION_SIZE 20
 #define LIB_EXTENSION 3  // .so
 #define LIB_BEGINNING 3  // lib
 #define UNKNOWN_LIB "unknown"
@@ -70,25 +70,22 @@ void close_after_interrupt(int sock, int device) {
 }
 
 void initialize_firstmsg(struct Firstmsg *m, int argc, char **argv) {
+  char option[MAX_OPTION_SIZE];
   strncpy(m->filename, argv[2], NAME_MAX);
-  if (argc == 4) {
-    strncpy(m->libfile, argv[3], NAME_MAX-6);
-    strncpy(m->libfile, ( (strcmp(m->libfile, "blank") == 0) ?
-                          "libblank.so" : UNKNOWN_LIB), NAME_MAX);
-  } else if (argc == 5) {
-    printf("INside argc == 5\n");
-    char option[MAX_OPTION_SIZE + 1];
-    strncpy(m->libfile, argv[3], NAME_MAX - LIB_EXTENSION - LIB_BEGINNING);
-     printf("%s\n", m->libfile);
-    strncpy(option, argv[4], MAX_OPTION_SIZE);
-    printf("This is option: %s\n", option);
-    strncpy(m->libfile, ( ((strcmp(m->libfile, "vol") == 0)  &&
-                           (strcmp(option, "--increase") == 0)) ? "libvolup.so" :
-                          ((strcmp(m->libfile, "vol") == 0)  && (strcmp(option, "--decrease") == 0)) ?
-                          "libvoldown.so" : UNKNOWN_LIB), NAME_MAX);
-    printf("%s\n", m->libfile);
-  } else {
+  if (argc == 3) {
     strncpy(m->libfile, NO_LIB_REQUESTED, NAME_MAX);
+  } else if (argc >= 4) {
+    strncpy(m->libfile, argv[3], NAME_MAX - LIB_EXTENSION - LIB_BEGINNING);
+    strncpy(m->libfile, ( (strcmp(m->libfile, "encrypt") == 0) ?
+                          "libencrypt.so" : (strcmp(m->libfile, "vol") == 0) ?  "libvol.so" : UNKNOWN_LIB), NAME_MAX);
+    strncpy(option, argv[4], MAX_OPTION_SIZE - 1);
+    printf("This is option: %s\n", option);
+    if ( (strcmp(m->libfile, "libvol.so") == 0) &&  ((strcmp(option, "--increase") == 0) || (strcmp(option, "--decrease") == 0))   ) {
+      m->option = option[2];
+      printf("This is the option: %c\n", m->option);
+    } else if ( (strcmp(m->libfile, "libencrypt.so") == 0) &&  ((strcmp(option, "--vigenere") == 0) || (strcmp(option, "--onetimepad") == 0))   ) {
+      m->option = option[2];
+    }
   }
 }
 
@@ -231,7 +228,7 @@ int main(int argc, char **argv) {
         len = audio_chunk.length;
         if (audio_chunk.msg_counter == expected_chunk_no) {
           if (pfunc) {
-            pfunc(audio_chunk.buffer, audio_chunk.length);
+            pfunc(audio_chunk.buffer, audio_chunk.length, msg.option);
           }
           /* Writing to output device if the received chunk is the right one */
           err = write(audio_fd, audio_chunk.buffer, audio_chunk.length);

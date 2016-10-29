@@ -16,6 +16,7 @@
 struct Firstmsg {
   char filename[NAME_MAX+1];  // plus one since NAME_MAX doesn't contain '\0'
   char libfile[NAME_MAX+1];
+  char option;
 };
 
 struct Audioconf {

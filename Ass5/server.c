@@ -114,7 +114,7 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
   int data_fd, err;
   int channels, sample_size, sample_rate;
   server_filterfunc pfunc;
-  char *datafile, *libfile;
+  char *datafile, *libfile, option;
   fd_set read_set;
   void *filter;
   struct timeval timeout;
@@ -129,6 +129,8 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
     libfile = NULL;
   } else {
     libfile = msg.libfile;
+    // to fix to remove
+    option = msg.option;
   }
   /* Opening input audio file */
   data_fd = aud_readinit(datafile, &sample_rate, &sample_size, &channels);
@@ -197,7 +199,7 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
         audio_chunk.msg_counter+=1;
         audio_chunk.length = bytesread;
         if (pfunc) {
-          pfunc(audio_chunk.buffer, audio_chunk.length);
+          pfunc(audio_chunk.buffer, audio_chunk.length, option);
         }
       } /* else the same packet will be resent to the client */
     }
