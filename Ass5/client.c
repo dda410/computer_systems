@@ -69,10 +69,6 @@ void close_after_interrupt(int sock, int device) {
   exit(EXIT_SUCCESS);
 }
 
-void create_libname(char *requested_lib) {
-  char libname[NAME_MAX]="lib"
-}
-
 void initialize_firstmsg(struct Firstmsg *m, int argc, char **argv) {
   char option[MAX_OPTION_SIZE];
   strncpy(m->filename, argv[2], NAME_MAX);
@@ -80,9 +76,10 @@ void initialize_firstmsg(struct Firstmsg *m, int argc, char **argv) {
     strncpy(m->libfile, NO_LIB_REQUESTED, NAME_MAX);
   } else if (argc >= 4) {
     /* The library is copied to the Firstmsg structure */
-    strncpy(m->libfile, argv[3], NAME_MAX - LIB_EXTENSION - LIB_BEGINNING);
-    strncpy(m->libfile, ( (strcmp(m->libfile, "encrypt") == 0) ?
-                          "libencrypt.so" : (strcmp(m->libfile, "vol") == 0) ?  "libvol.so" : UNKNOWN_LIB), NAME_MAX);
+    strncpy(m->libfile, "lib", strlen("lib")+1);
+    strncat(m->libfile, argv[3], NAME_MAX - LIB_EXTENSION - LIB_BEGINNING);  // libfile is [NAME_MAX + 1]
+    strncat(m->libfile, ".so", NAME_MAX - LIB_EXTENSION - LIB_BEGINNING);
+    printf("This is libfile complete: %s\n", m->libfile);  // to remove
     if (argc == 5) {
       /* The option is copied to the Firstmsg structure */
         strncpy(option, argv[4], MAX_OPTION_SIZE - 1);
