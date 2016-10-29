@@ -9,6 +9,7 @@
 #define VIGENERE 'v'
 #define KEY_FILE "keyfile"
 #define VIG_KEY_LEN 20
+#define printf_error_handling(err) ( (err) < 0 ? fprintf(stderr, "Error while printing to standard output.\n"), exit(EXIT_FAILURE) : 0)
 
 static int otp_key[BUFSIZE];
 static int vig_key[VIG_KEY_LEN];
@@ -17,6 +18,8 @@ static int read_key = 0;
 
 /* Randomly creates the key of the requested algorithm and stores it in a file */
 void init(char c) {
+  int err = printf("The buffers will be encrypted with the %s algorithm\n", (c == VIGENERE) ? "vigenere" : "one time pad");
+  printf_error_handling(err);
   int i;
   FILE *f = fopen(KEY_FILE, "w");
   if (f == NULL) {
@@ -40,30 +43,29 @@ void init(char c) {
   }
 }
 
-/* Encodes the data stream accordingly to the requested algorithm */
+/* Encrypts the data stream accordingly to the requested algorithm */
 int encode(char* buffer, int bufferlen, char option) {
   if (generate_key == 0) {
     generate_key++;
     init(option);
   }
-  printf("This is generate_key: %d\n", generate_key);
   int i;
   if (option == ONE_TIME_PAD) {
     for (i = 0; i < bufferlen; i++) {
       buffer[i] = buffer[i] + otp_key[i];
     }
-    printf("The buffer has been encoded with one time pad algorithm\n");
   } else  if (option == VIGENERE) {
     for (i = 0; i < bufferlen; i++) {
       buffer[i] = buffer[i] + vig_key[i % VIG_KEY_LEN];
     }
-    printf("The buffer has been encoded with vigenere algorithm\n");
   }
   return bufferlen;
 }
 
 /* Reads the key created by the server */
 void read_table(char c) {
+  int err = printf("The buffers will be decrypted with the %s algorithm\n", (c == VIGENERE) ? "vigenere" : "one time pad");
+  printf_error_handling(err);
   int i;
   FILE *f = fopen(KEY_FILE, "r");
   if (f == NULL) {
@@ -85,7 +87,7 @@ void read_table(char c) {
   }
 }
 
-/* Decodes the received cryted stream */
+/* Decrypts the received cryted stream */
 int decode(char* buffer, int bufferlen, char option) {
   if (read_key == 0) {
     read_key++;
@@ -96,12 +98,10 @@ int decode(char* buffer, int bufferlen, char option) {
     for (i = 0; i < bufferlen; i++) {
       buffer[i] = buffer[i] - otp_key[i];
     }
-    printf("The buffer has been decoded with one time pad algorithm\n");
   } else  if (option == VIGENERE) {
     for (i = 0; i < bufferlen; i++) {
       buffer[i] = buffer[i] - vig_key[i % VIG_KEY_LEN];
     }
-    printf("The buffer has been decoded with vigenere algorithm\n");
   }
   return bufferlen;
 }
