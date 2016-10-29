@@ -24,9 +24,8 @@
 #define NO_RESPONSE_LIMIT 5
 #define NO_AUDIO_FILE -1
 #define MAX_OPTION_SIZE 20
-#define LIB_EXTENSION 3  // .so
-#define LIB_BEGINNING 3  // lib
-#define UNKNOWN_LIB "unknown"
+#define LIB_EXT ".so"
+#define LIB_BEGINNING "lib"
 #define error_handling(err, expr) ( (err) < 0 ? fprintf(stderr, expr ": %s\n", strerror(errno)), exit(EXIT_FAILURE): 0)
 #define printf_error_handling(err) ( (err) < 0 ? fprintf(stderr, "Error while printing to standard output.\n"), exit(EXIT_FAILURE) : 0)
 
@@ -70,32 +69,33 @@ void close_after_interrupt(int sock, int device) {
 }
 
 void initialize_firstmsg(struct Firstmsg *m, int argc, char **argv) {
-  char option[MAX_OPTION_SIZE];
   strncpy(m->filename, argv[2], NAME_MAX);
   if (argc == 3) {
     strncpy(m->libfile, NO_LIB_REQUESTED, NAME_MAX);
   } else if (argc >= 4) {
     /* The library is copied to the Firstmsg structure */
-    strncpy(m->libfile, "lib", strlen("lib")+1);
-    strncat(m->libfile, argv[3], NAME_MAX - LIB_EXTENSION - LIB_BEGINNING);  // libfile is [NAME_MAX + 1]
-    strncat(m->libfile, ".so", NAME_MAX - LIB_EXTENSION - LIB_BEGINNING);
+    strncpy(m->libfile, LIB_BEGINNING, strlen(LIB_BEGINNING)+1);
+    strncat(m->libfile, argv[3], NAME_MAX - strlen(LIB_EXT) - strlen(LIB_BEGINNING));  // libfile is [NAME_MAX + 1]
+    strncat(m->libfile, LIB_EXT, strlen(LIB_EXT)+1);
     printf("This is libfile complete: %s\n", m->libfile);  // to remove
     if (argc == 5) {
       /* The option is copied to the Firstmsg structure */
-        strncpy(option, argv[4], MAX_OPTION_SIZE - 1);
-        if ( (strcmp(m->libfile, "libvol.so") == 0) && ((strcmp(option, "--increase") == 0) || (strcmp(option, "--decrease") == 0))) {
-          m->option = option[2];
-          printf("This is the option: %c\n", m->option);
-        } else if ( (strcmp(m->libfile, "libencrypt.so") == 0) && ((strcmp(option, "--vigenere") == 0) || (strcmp(option, "--onetimepad") == 0))) {
-          m->option = option[2];
-        } else {
-          fprintf(stderr, "wrong option inserted. Aborting.\n");
-          exit(EXIT_FAILURE);
-        }
-    } else if (strcmp(m->libfile, "libencrypt.so") == 0  || strcmp(m->libfile, "libvol.so") == 0) {
-        fprintf(stderr, "option is required and is missing. Aborting.\n");
+      char *option = (char *)malloc(MAX_OPTION_SIZE);
+      strncpy(option, argv[4], MAX_OPTION_SIZE - 1);
+      if ( (strcmp(m->libfile, "libvol.so") == 0) && ((strcmp(option, "--increase") == 0) || (strcmp(option, "--decrease") == 0))) {
+        m->option = option[2];
+        printf("This is the option: %c\n", m->option);
+      } else if ( (strcmp(m->libfile, "libencrypt.so") == 0) && ((strcmp(option, "--vigenere") == 0) || (strcmp(option, "--onetimepad") == 0))) {
+        m->option = option[2];
+      } else {
+        fprintf(stderr, "wrong option inserted. Aborting.\n");
         exit(EXIT_FAILURE);
       }
+      free(option);
+    } else if (strcmp(m->libfile, "libencrypt.so") == 0  || strcmp(m->libfile, "libvol.so") == 0) {
+      fprintf(stderr, "option is required and is missing. Aborting.\n");
+      exit(EXIT_FAILURE);
+    }
   }
 }
 
