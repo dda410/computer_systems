@@ -129,7 +129,6 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
     libfile = NULL;
   } else {
     libfile = msg.libfile;
-    // to fix to remove
     option = msg.option;
   }
   /* Opening input audio file */
@@ -145,9 +144,13 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
   /* optionally open a library if one is requested (next assignment) */
   if (libfile && (strcmp(libfile, "libspeed.so") != 0)) {
     filter = dlopen(libfile, RTLD_NOW);
+    if (!filter) {
+      fprintf(stderr, "failed to open the requested library. breaking hard\n");
+      return -1;
+    }
     pfunc = dlsym(filter, "encode");
     if (!pfunc) {
-      err = printf("failed to open the requested library. breaking hard\n");
+      err = printf("failed to open the requested function. breaking hard\n");
       printf_error_handling(err);
       send_error_to_client(client_fd, LIB_NOT_FOUND, &conf, addr);
       return -1;
@@ -161,7 +164,6 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
   }
   /* Configuring the Audioconf struct, needed in order to play the file. */
   if ((strcmp(libfile, "libspeed.so") == 0)) {
-    printf("This is option: %c\n", option);
     sample_rate = (option == 'd') ? (sample_rate * 0.5) : (sample_rate * 1.5);
   }
   configure_audio(&conf, channels, sample_size, sample_rate);

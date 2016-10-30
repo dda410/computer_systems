@@ -77,14 +77,12 @@ void initialize_firstmsg(struct Firstmsg *m, int argc, char **argv) {
     strncpy(m->libfile, LIB_BEGINNING, strlen(LIB_BEGINNING)+1);
     strncat(m->libfile, argv[3], NAME_MAX - strlen(LIB_EXT) - strlen(LIB_BEGINNING));  // libfile is [NAME_MAX + 1]
     strncat(m->libfile, LIB_EXT, strlen(LIB_EXT)+1);
-    printf("This is libfile complete: %s\n", m->libfile);  // to remove
     if (argc == 5) {
       /* The option is copied to the Firstmsg structure */
       char *option = (char *)malloc(MAX_OPTION_SIZE);
       strncpy(option, argv[4], MAX_OPTION_SIZE - 1);
       if ( (strcmp(m->libfile, "libvol.so") == 0) && ((strcmp(option, "--increase") == 0) || (strcmp(option, "--decrease") == 0))) {
         m->option = option[2];
-        printf("This is the option: %c\n", m->option);
       } else if ( (strcmp(m->libfile, "libencrypt.so") == 0) && ((strcmp(option, "--vigenere") == 0) || (strcmp(option, "--onetimepad") == 0))) {
         m->option = option[2];
       } else if ( (strcmp(m->libfile, "libspeed.so") == 0) && ((strcmp(option, "--increase") == 0) || (strcmp(option, "--decrease") == 0))) {
@@ -196,13 +194,13 @@ int main(int argc, char **argv) {
   if (argv[3]) {
     filt = dlopen(msg.libfile, RTLD_NOW);
     if (!filt) {
-      printf("Symbol error: %s\n", dlerror());
+      fprintf(stderr, "failed to open the requested library. breaking hard\n");
+      return -1;
     }
     pfunc = dlsym(filt, "decode");
     if (!pfunc) {
-      printf("Symbol error: %s\n", dlerror());
-      fprintf(stderr, "failed to open the requested library. breaking hard\n");
-      /* return -1; */
+      fprintf(stderr, "failed to open the requested function. breaking hard\n");
+      return -1;
     }
     err = printf("opened libraryfile %s\n", argv[3]);
     printf_error_handling(err);
