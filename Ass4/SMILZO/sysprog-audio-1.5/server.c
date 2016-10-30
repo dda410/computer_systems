@@ -111,6 +111,7 @@ void configure_audio(struct Audioconf *c, int ch, int ss, int sr) {
 /* Streams readed chunks from the audio file to the client till it has been
  * completely read. @return returns 0 on success or a negative errorcode on failure */
 int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
+  char header[44];
   int data_fd, err;
   int channels, sample_size, sample_rate;
   server_filterfunc pfunc;
@@ -160,6 +161,7 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
   err = sendto(client_fd, &conf, sizeof(struct Audioconf), 0,
                (struct sockaddr*) addr, sizeof(struct sockaddr_in));
   error_handling(err, "Error while sending audio configuration datagram");
+  read(data_fd, header, sizeof(header));  // reading the wave header
   /* start streaming content to client  */
   {
     int bytesread;
