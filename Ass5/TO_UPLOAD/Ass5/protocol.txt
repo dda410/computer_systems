@@ -1,0 +1,141 @@
+DOCUMENTATION ASSIGNMENT 5 SYSTEM PROGRAMMING
+=============================================
+Dimitri Diomaiuta (2553339)
+
+
+Introduction
+~~~~~~~~~~~~
+
+The assignment is about implementing audio filters for the audio
+server implemented in assignment 4. Those filters can either work on
+server, client or on both (requiring both the server and client to
+filter the same chunk of audio data). 
+
+Structure update
+~~~~~~~~~~~~~~~~
+
+client.c:
+	The client code is updated to load dynamically the requested filters.
+Makefile:
+	The makefile code is updated to compile and dynamically link
+	the libraries to the output binaries.
+msg.h:
+	The Firstmsg structure contained in the msg.h header is
+	updated with the option character (char option). The option
+	will hold the possible options for the filters.
+server.c:
+	The server code is updated to load dynamically the requested
+	filters.
+libencrypt.c:
+	The source code of the library that specifies the encrypt
+	filter.
+libvol.c:
+	The source code of the library that specifies the vol (volume
+	adjustment) filter.
+
+
+Compilation
+~~~~~~~~~~~
+
+The invocation of the Makefile will compile each c file and then link
+all the required binaries and dynamic libraries to client and server.
+
+
+Execution
+~~~~~~~~~
+
+Once in the directory where the server and client BLOB are:
+-----------------------------------------------------------
+./server # with no arguments
+./client <host name or address(ipv4)> <audio file> <library (filters)>
+-----------------------------------------------------------
+The last client argument is optional and will be implemented in the
+next assignment.
+
+
+Filters
+~~~~~~~
+
+The program contains three different filters:
+    1. vol:
+       This filter deals with the volume adjustment of the played
+       file. It is applied on the server side. It has two different
+       options which are needed to use the filters and specify its
+       behaviour:
+       	       --increase: makes the volume of the played file increased
+    	       by 40%
+	       --decrease: makes the volume of the played file decreased
+    	       by 80%
+
+      The filter is invoked as follows:
+      --------------------------------------------
+      ./client localhost "file" "vol" "--increase"
+      --------------------------------------------
+      or
+      --------------------------------------------
+      ./client localhost "file" "vol" "--decrease"
+      --------------------------------------------
+
+    2. speed:
+       This filter deals with the speed adjustment of the played
+       file. It is applied on the server side. It has two different
+       options which are needed to use the filter and specify its
+       behavior:
+       	      --increase: makes the speed of the played file increased
+    	       by 50%
+	       --decrease: makes the speed of the played file decreased
+    	       by 50%
+
+      The filter is invoked as follows:
+      ----------------------------------------------
+      ./client localhost "file" "speed" "--increase"
+      ----------------------------------------------
+      or
+      ----------------------------------------------
+      ./client localhost "file" "speed" "--decrease"
+      ----------------------------------------------
+
+    3. encrypt:
+       This filter deals with the encryption/decryption of the audio
+       chunks. It is applied on both the server and the client
+       side. The key file is generated and the file is encrypted
+       accordingly by the server. The client, once received the audio
+       chunk, decrypts it accordingly to the generated key. It has two
+       different options which are needed to use the filter and
+       specify its behavior:
+       	       --vigenere: the audio chunk is encrypted/decrypted
+	       accordingly to the vigenere algorithm using a key of
+	       size 20.
+	       --onetimepad: the audio chunk is encrypted/decrypted
+       	       accordignly to the one time pad algorithm. Since one
+       	       time pad encrypts each input character individually the
+       	       key size is the length of the buffer (which is imported
+       	       from the macro thatspecifies it in the msg.h header).
+
+       The key is generated before the first chunk encryption and is
+       stored in a file. At the first chunk decryption the key will be
+       read and store in order to decrypt the audio chunk.
+       
+       The filter is invoked as follows:
+       ------------------------------------------------
+       ./client localhost "file" "encrypt" "--vigenere"
+       ------------------------------------------------
+       or
+       --------------------------------------------------
+       ./client localhost "file" "encrypt" "--onetimepad"
+       --------------------------------------------------
+
+
+Libraries
+~~~~~~~~~
+
+The vol and encrypt filters directly modify the byte of the audio
+chunks. They are implemented as dynamic loaded libraries. If the user
+specifies one of these two filters the respective library used to
+apply it will be loaded at runtime.
+The speed filter modifies the frequency parameter (sample_rate) of the
+played file hence it does not need a library to be implemented. A
+control statement in the server body suffices to implement this filter.
+
+
+|=[ EOF ]=---------------------------------------------------------------=|

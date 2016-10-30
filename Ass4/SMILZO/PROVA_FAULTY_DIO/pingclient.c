@@ -56,7 +56,7 @@ int main(int argc, char *argv[]) {
   struct sockaddr_in dest;
   struct in_addr *addr;
   socklen_t dest_len = sizeof(struct sockaddr_in);
-  strncpy(msg.filename, "castle_a.wav",30);
+  strncpy(msg.filename, "cas3tle_a.wav",30);
   strncpy(msg.libfile, "dio cane aaa libreria",30); 
   addr = get_IP(hostname);
   /* Creating the socket */

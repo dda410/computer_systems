@@ -1,31 +1,26 @@
-/* server.c
- *
- * part of the Systems Programming assignment
- * (c) Vrije Universiteit Amsterdam, 2005-2015. BSD License applies
- * author  : wdb -_at-_ few.vu.nl
- * contact : arno@cs.vu.nl
- * */
-
+#include <arpa/inet.h>
 #include <dlfcn.h>
 #include <errno.h>
+#include <netdb.h>
 #include <netinet/in.h>
+#include <resolv.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
 #include <sys/time.h>
 #include <sys/types.h>
 #include <unistd.h>
 
-#include "msg.h"
 #include "library.h"
 #include "audio.h"
-#include "audio.c"  // to remove
+#include "msg.h"
 
-/// a define used for the copy buffer in stream_data(...)
-/* #define BUFSIZE 1024 */
 #define PORT 1234
 #define WAITING_TIME 1
+#define RESEND_PACKET_LIMIT 10
 #define error_handling(err, expr) ( (err) < 0 ? fprintf(stderr, expr ": %s\n", strerror(errno)), exit(EXIT_FAILURE): 0)
 
 static int breakloop = 0;	///< use this variable to stop your wait-loop. Occasionally check its value, !1 signals that the program should close
@@ -34,6 +29,18 @@ void parse_arguments(int argc) {
   if (argc != 1) {
     fprintf(stderr, "Usage: server\n\n");
     exit(EXIT_FAILURE);
+  }
+}
+
+/// unimportant: the signal handler. This function gets called when Ctrl^C is pressed
+void sigint_handler(int sigint) {
+  if (!breakloop){
+    breakloop=1;
+    printf("SIGINT catched. Please wait to let the server close gracefully.\nTo close hard press Ctrl^C again.\n");
+    // check printf error
+  } else {
+    printf ("SIGINT occurred, exiting hard... please wait\n");
+    exit(-1);
   }
 }
 
@@ -59,64 +66,82 @@ int wait_for_response(fd_set *set, int fd, struct timeval *t) {
   return select(fd+1, set, NULL, NULL, t);
 }
 
-int resend_lost_packets() {
+void send_error_to_client(int fd, int err, struct Audioconf *c,
+                          struct sockaddr_in *addr) {
+  c->error = err;
+  err = sendto(fd, c, sizeof(struct Audioconf), 0,
+               (struct sockaddr*) addr, sizeof(struct sockaddr_in));
+  error_handling(err, "Error while sending audio configuration datagram");
+  // Send error message back to client in the case the wav file was not found
 }
 
+void configure_audio(struct Audioconf *c, int ch, int ss, int sr) {
+  c->channels = ch;
+  c->audio_size = ss;
+  c->audio_rate = sr;
+  c->error = SUCCESS;
+}
 
-/// stream data to a client. 
-///
-/// This is an example function; you do *not* have to use this and can choose a different flow of control
-///
+int check_lost_packet(fd_set *set, int fd, struct timeval *t, struct sockaddr_in *addr,
+                      socklen_t *addr_len, struct Datamsg *aud, unsigned int ack) {
+  printf("Inside check_lost_packet for ack no: %u", ack);
+  int err = wait_for_response(set, fd, t);
+  error_handling(err, "Error while monitoring file descriptors");
+  if (err == 0) {
+    // packet has been lost since client not returning anything.
+    return -1;
+  }  else if (FD_ISSET(fd, set)) {
+    // receiving the acknowledgement from the client.
+    err = recvfrom(fd, &ack, (size_t) sizeof(ack), 0,
+                   (struct sockaddr*) addr, addr_len);
+    error_handling(err, "Error while receiving acknowledgement");
+    if (ack != aud->msg_counter){
+      // The client has returned the wrong acknowledgement.
+      return -1;
+    }
+  }
+  return 0;
+}
+
 /// @param fd an opened file descriptor for reading and writing
 /// @return returns 0 on success or a negative errorcode on failure
 int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
-  int data_fd, err, acknowledgement;
+  int data_fd, err, nb;
   int channels, sample_size, sample_rate;
   server_filterfunc pfunc;
-  char *datafile, *libfile;
-  char buffer[BUFSIZE];
+  char *datafile, *libfile, *em;
   fd_set read_set;
   struct timeval timeout;
   struct Firstmsg msg;  // To store the first received msg contining the file and library paths.
   struct Audioconf conf;  // To store the configuaration of the audio file to be sent.
   struct Datamsg audio_chunk;  // To store the chuks of the audio stream.
 
-
-        
-  // TO IMPLEMENT
-  // receive a control packet from the client 
-  // containing at the least the name of the file to stream and the library to use
   err = recvfrom(client_fd, &msg, (size_t) sizeof(msg), 0,
                  (struct sockaddr*) addr, addr_len);
   error_handling(err, "Error while receiving datagram");
   printf("This is the filename: %s\n this the lib: %s\n", msg.filename, msg.libfile); // to remove
-  /* { */
-  /*   datafile = strdup("example.wav"); */
-  /*   libfile = NULL; */
-  /* } */
   datafile = msg.filename;
   libfile = NULL;
-	
   // open input
   data_fd = aud_readinit(datafile, &sample_rate, &sample_size, &channels); // to uncomment
+  
   if (data_fd < 0){
-    printf("failed to open datafile %s, skipping request\n",datafile);
-    // check printf error code or use fprintf to print to standard error
-    conf.error = AUDIO_FILE_NOT_FOUND;
-    // Send error message back to client in the case the wav file was not found
+    err = printf("failed to open datafile %s, skipping request\n",datafile);
+    // check printf error code 
+    send_error_to_client(client_fd, AUDIO_FILE_NOT_FOUND, &conf, addr);
     return -1;
   }
   printf("opened datafile %s\n", datafile);
   // check printf error code
-  printf("This the sample_rate: %d\nThis the sample_size: %d\nThis the channels: %d\n", sample_rate, sample_size, channels);  // to remove
+  printf("This the sample_rate: %d\nThis the sample_size: %d\nThis the channels: %d\n", sample_rate, sample_size, channels);  //  to remove
   // optionally open a library
   if (libfile) {
     // try to open the library, if one is requested
-    pfunc = NULL;
+    pfunc = NULL;  // This will be implemented in the next assignment
     if (!pfunc) {
-      printf("failed to open the requested library. breaking hard\n");
+      err = printf("failed to open the requested library. breaking hard\n");
       // check error code
-      conf.error = LIB_NOT_FOUND;
+      send_error_to_client(client_fd, LIB_NOT_FOUND, &conf, addr);
       // Send message back to client in the case the library was not found
       return -1;
     }
@@ -127,81 +152,52 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
     pfunc = NULL;
     printf("not using a filter\n");
   }
-
-  conf.channels = channels;
-  conf.audio_size = sample_size;
-  conf.audio_rate = sample_rate;
-  conf.error = SUCCESS;
+  // Configuring the Audioconf struct, needed in order to play the file.
+  configure_audio(&conf, channels, sample_size, sample_rate);
   // Send Audioconf packet back to client in order to inform on how to play the streamed data.
   err = sendto(client_fd, &conf, sizeof(struct Audioconf), 0, (struct sockaddr*) addr, sizeof(struct sockaddr_in));
   error_handling(err, "Error while sending audio configuration datagram");
-  // TO IMPLEMENT : optionally return an error code to the client if initialization went wrong
-
-
   // start streaming
-  {
-    int bytesread, bytesmod, i = 0;
-    /* bytesread = read(data_fd, buffer, BUFSIZE); */
-    while ( (bytesread = read(data_fd, audio_chunk.buffer, BUFSIZE)) > 0){
-      i++;
-      // you might also want to check that the client is still active, whether it wants resends, etc..
-      /* audio_chunk.buffer = buffer; */
-      audio_chunk.length = bytesread;
-      audio_chunk.endflag = (bytesread < BUFSIZE) ? LAST_CHUNK : STILL_READING_FILE;
-      audio_chunk.msg_counter = i;
-      // edit data in-place. Not necessarily the best option
-      if (pfunc) {
-        bytesmod = pfunc(audio_chunk. buffer, bytesread);
-      }
-      err = sendto(client_fd, &audio_chunk, sizeof(struct Datamsg), 0, (struct sockaddr*) addr, sizeof(struct sockaddr_in));
-      error_handling(err, "Error while sending audio chunk to client");
-      // resend lost packets
-      err = wait_for_response(&read_set, client_fd, &timeout);
-      error_handling(err, "Error while monitoring file descriptors");
-      if (err == 0) {
-        // resending packet since no acknowledgement received
-        err = sendto(client_fd, &audio_chunk, sizeof(struct Datamsg), 0, (struct sockaddr*) addr, sizeof(struct sockaddr_in));
-        error_handling(err, "Error while sending audio chunk to client");
-      } else {
-        // resending packet since acknowledgement doesn't match packet number.
-        err = recvfrom(client_fd, &acknowledgement, (size_t) sizeof(acknowledgement), 0,
-                       (struct sockaddr*) addr, addr_len);
-        error_handling(err, "Error while receiving acknowledgement");
-        if (ackowledgement != audio_chunk.msg_counter){
-          err = sendto(client_fd, &audio_chunk, sizeof(struct Datamsg), 0, (struct sockaddr*) addr, sizeof(struct sockaddr_in));
-          error_handling(err, "Error while sending audio chunk to client");
+      {
+        int bytesread, bytesmod, flag = 1, timeoutcounter;
+        unsigned int counter;
+        audio_chunk.msg_counter = 0;
+        while ((bytesread = read(data_fd, audio_chunk.buffer, sizeof(audio_chunk.buffer))) > 0) {
+          audio_chunk.msg_counter+=1;
+          //initialise or reset timeout
+
+          //set the length of the audiobuffer and send datamessage
+          audio_chunk.length = bytesread;
+          err = sendto(client_fd, &audio_chunk, 
+                       sizeof(struct Datamsg), 0, 
+                       (struct sockaddr*) addr, sizeof(struct sockaddr_in));
+
+
+          //wait for ack and resend if timeout occurs
+          err = wait_for_response(&read_set, client_fd, &timeout);
+          error_handling(err, "Error while monitoring file descriptors");
+          // check err == 0
+          if(FD_ISSET(client_fd, &read_set)) {
+            err = recvfrom(client_fd, &counter, sizeof(flag), 0,
+                           (struct sockaddr*) addr, addr_len);
+            printf("This is the acknowledgement no: %u\n", counter);
+            // listen for acknowledgement
+
+            // check for resendflag in acknowledgement
+            if (flag == 0) {
+              printf("Clientside requests resend of last message");
+              //server reverts back to while loop and resends
+            }
+          }
         }
       }
-      /* write(client_fd, buffer, bytesmod); */  //  equivalent to send() without flags. it can be used instead of sendto() since the socket is already conncted
-      /* bytesread = read(data_fd, buffer, BUFSIZE); */
-    }
-  }
-
-  // TO IMPLEMENT : optionally close the connection gracefully 	
-	
-  if (client_fd >= 0)
-    close(client_fd);
-  if (data_fd >= 0)
-    close(data_fd);
-  if (datafile)
-    free(datafile);
-  if (libfile)
-    free(libfile);
-	
-  return 0;
-}
-
-/// unimportant: the signal handler. This function gets called when Ctrl^C is pressed
-void sigint_handler(int sigint)
-{
-  if (!breakloop){
-    breakloop=1;
-    printf("SIGINT catched. Please wait to let the server close gracefully.\nTo close hard press Ctrl^C again.\n");
-  }
-  else{
-    printf ("SIGINT occurred, exiting hard... please wait\n");
-    exit(-1);
-  }
+      // Check errors for this two dio can
+      // do not close client_fd since is the same
+      /* if (client_fd >= 0)     */
+      /*   close(client_fd); */
+      if (data_fd >= 0)
+        close(data_fd);
+      return 0;
 }
 
 /// the main loop, continuously waiting for clients
@@ -230,11 +226,13 @@ int main(int argc, char **argv) {
     // when a client connects, start streaming data (see the stream_data(...) prototype above)
     err = stream_data(fd, &addr, &addr_len);
     if (err < 0) {
+      printf("Some error occurred\nServer still up and running for new requests");
       /* Error handling here, the server can continue running in case of error with a signle client */
     }
     sleep(1);
   }
-
+  err = close(fd);
+  error_handling(err, "Error while closing the socket");
   return 0;
 }
 
