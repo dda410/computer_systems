@@ -143,7 +143,7 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
   err = printf("opened datafile %s\n", datafile);
   printf_error_handling(err);
   /* optionally open a library if one is requested (next assignment) */
-  if (libfile) {
+  if (libfile && (strcmp(libfile, "libspeed.so") != 0)) {
     filter = dlopen(libfile, RTLD_NOW);
     pfunc = dlsym(filter, "encode");
     if (!pfunc) {
@@ -160,6 +160,10 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
     printf_error_handling(err);
   }
   /* Configuring the Audioconf struct, needed in order to play the file. */
+  if ((strcmp(libfile, "libspeed.so") == 0)) {
+    printf("This is option: %c\n", option);
+    sample_rate = (option == 'd') ? (sample_rate * 0.5) : (sample_rate * 1.5);
+  }
   configure_audio(&conf, channels, sample_size, sample_rate);
   err = sendto(client_fd, &conf, sizeof(struct Audioconf), 0,
                (struct sockaddr*) addr, sizeof(struct sockaddr_in));
@@ -187,7 +191,8 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
         wrong_ack = (audio_chunk.msg_counter == counter) ? 0 : wrong_ack + 1;
       }
       if (lost_packets > RESEND_PACKET_LIMIT || wrong_ack > RESEND_PACKET_LIMIT) {
-        err = printf("Error while comunicating with client. Closing connection...\n");
+        err = printf("Client %s. Closing connection...\n",
+                     (lost_packets > 5) ? "not responding" : "sending wrong acknowledgements");
         printf_error_handling(err);
         err = close(data_fd);
         error_handling(err, "Error closing the audio file");

@@ -1,0 +1,7 @@
+1. write to protocol of version 4 after how many seconds client and server stop connection in case of faults
+2. remove stupid printfs
+3. check every function has errors checked after called
+4. see if another library could be added
+5. write protocol5.txt to changelog changes of this version
+6. clean useless comments and check for // to remove
+7. add comments where needed, add comments in libvol.

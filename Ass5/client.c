@@ -87,12 +87,14 @@ void initialize_firstmsg(struct Firstmsg *m, int argc, char **argv) {
         printf("This is the option: %c\n", m->option);
       } else if ( (strcmp(m->libfile, "libencrypt.so") == 0) && ((strcmp(option, "--vigenere") == 0) || (strcmp(option, "--onetimepad") == 0))) {
         m->option = option[2];
+      } else if ( (strcmp(m->libfile, "libspeed.so") == 0) && ((strcmp(option, "--increase") == 0) || (strcmp(option, "--decrease") == 0))) {
+        m->option = option[2];
       } else {
         fprintf(stderr, "wrong option inserted. Aborting.\n");
         exit(EXIT_FAILURE);
       }
       free(option);
-    } else if (strcmp(m->libfile, "libencrypt.so") == 0  || strcmp(m->libfile, "libvol.so") == 0) {
+    } else if (strcmp(m->libfile, "libencrypt.so") == 0  || strcmp(m->libfile, "libvol.so") == 0 || strcmp(m->libfile, "libspeed.so") == 0) {
       fprintf(stderr, "option is required and is missing. Aborting.\n");
       exit(EXIT_FAILURE);
     }
@@ -227,6 +229,7 @@ int main(int argc, char **argv) {
           return -1;
         }
       } else if (FD_ISSET(server_fd, &read_set)) {
+        no_response = 0;
         /* Receiving the audio chunk from server */
         bytesread = recvfrom(server_fd, &audio_chunk,
                              sizeof(struct Datamsg), 0, (struct sockaddr*) &dest, &dest_len);
