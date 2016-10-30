@@ -195,6 +195,7 @@ int main(int argc, char **argv) {
           return -1;
         }
       } else if (FD_ISSET(server_fd, &read_set)) {
+        no_response = 0;
         /* Receiving the audio chunk from server */
         bytesread = recvfrom(server_fd, &audio_chunk,
                              sizeof(struct Datamsg), 0, (struct sockaddr*) &dest, &dest_len);

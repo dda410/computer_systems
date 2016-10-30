@@ -183,7 +183,8 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
         wrong_ack = (audio_chunk.msg_counter == counter) ? 0 : wrong_ack + 1;
       }
       if (lost_packets > RESEND_PACKET_LIMIT || wrong_ack > RESEND_PACKET_LIMIT) {
-        err = printf("Error while comunicating with client. Closing connection...\n");
+        err = printf("Client %s. Closing connection...\n",
+                     (lost_packets > 5) ? "not responding" : "sending wrong acknowledgements");
         printf_error_handling(err);
         err = close(data_fd);
         error_handling(err, "Error closing the audio file");
