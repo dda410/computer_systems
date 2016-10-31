@@ -83,17 +83,21 @@ void initialize_firstmsg(struct Firstmsg *m, int argc, char **argv) {
       strncpy(option, argv[4], MAX_OPTION_SIZE - 1);
       if ( (strcmp(m->libfile, "libvol.so") == 0) && ((strcmp(option, "--increase") == 0) || (strcmp(option, "--decrease") == 0))) {
         m->option = option[2];
-      } else if ( (strcmp(m->libfile, "libencrypt.so") == 0) && ((strcmp(option, "--vigenere") == 0) || (strcmp(option, "--onetimepad") == 0))) {
-        m->option = option[2];
       } else if ( (strcmp(m->libfile, "libspeed.so") == 0) && ((strcmp(option, "--increase") == 0) || (strcmp(option, "--decrease") == 0))) {
         m->option = option[2];
+      } else if ((strcmp(m->libfile, "libencrypt.so") != 0)) {
+          fprintf(stderr, "wrong option inserted. Aborting.\n");
+          exit(EXIT_FAILURE);
       } else {
-        fprintf(stderr, "wrong option inserted. Aborting.\n");
+        fprintf(stderr, "no option required. Aborting.\n");
         exit(EXIT_FAILURE);
       }
       free(option);
-    } else if (strcmp(m->libfile, "libencrypt.so") == 0  || strcmp(m->libfile, "libvol.so") == 0 || strcmp(m->libfile, "libspeed.so") == 0) {
+    } else if (strcmp(m->libfile, "libvol.so") == 0 || strcmp(m->libfile, "libspeed.so") == 0) {
       fprintf(stderr, "option is required and is missing. Aborting.\n");
+      exit(EXIT_FAILURE);
+    } else if ((strcmp(m->libfile, "libencrypt.so") != 0)) {
+      fprintf(stderr, "wrong library inserted. Aborting.\n");
       exit(EXIT_FAILURE);
     }
   }
@@ -191,7 +195,7 @@ int main(int argc, char **argv) {
   audio_fd = aud_writeinit(conf.audio_rate, conf.audio_size, conf.channels);
   error_handling(audio_fd, "Error while opening/finding audio output device.");
   /* open the library on the clientside if one is requested (next assignment) */
-  if (argv[3]) {
+  if (argv[3] && (strcmp(msg.libfile, "libspeed.so") != 0)) {
     filt = dlopen(msg.libfile, RTLD_NOW);
     if (!filt) {
       fprintf(stderr, "failed to open the requested library. breaking hard\n");

@@ -8,7 +8,7 @@
 #define DOWN_OPTION 'd'
 
 /* Increseases or decreases the volume accordingly to the option parameter */
-int encode(char* buffer, int bufferlen, char option) {
+void encode(char* buffer, int bufferlen, char option) {
   int i;
   if (option == DOWN_OPTION) {
     for (i = 0; i < bufferlen; i++) {
@@ -19,9 +19,7 @@ int encode(char* buffer, int bufferlen, char option) {
       buffer[i] = buffer[i] * UP_VOL;
     }
   }
-  return bufferlen;
 }
 
-int decode(char* buffer, int bufferlen, char option) {
-  return bufferlen;
+void decode(char* buffer, int bufferlen, char option) {
 }

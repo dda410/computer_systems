@@ -100,30 +100,17 @@ The program contains three different filters:
        chunks. It is applied on both the server and the client
        side. The key file is generated and the file is encrypted
        accordingly by the server. The client, once received the audio
-       chunk, decrypts it accordingly to the generated key. It has two
-       different options which are needed to use the filter and
-       specify its behavior:
-       	       --vigenere: the audio chunk is encrypted/decrypted
-	       accordingly to the vigenere algorithm using a key of
-	       size 20.
-	       --onetimepad: the audio chunk is encrypted/decrypted
-       	       accordignly to the one time pad algorithm. Since one
-       	       time pad encrypts each input character individually the
-       	       key size is the length of the buffer (which is imported
-       	       from the macro thatspecifies it in the msg.h header).
-
+       chunk, decrypts it accordingly to the generated key. It does
+       not have any option. Once the filter is invoked the program
+       will apply the one time pad algorithm to the audio chunk.
        The key is generated before the first chunk encryption and is
        stored in a file. At the first chunk decryption the key will be
        read and store in order to decrypt the audio chunk.
        
        The filter is invoked as follows:
        ------------------------------------------------
-       ./client localhost "file" "encrypt" "--vigenere"
+       ./client localhost "file" "encrypt"
        ------------------------------------------------
-       or
-       --------------------------------------------------
-       ./client localhost "file" "encrypt" "--onetimepad"
-       --------------------------------------------------
 
 
 Libraries

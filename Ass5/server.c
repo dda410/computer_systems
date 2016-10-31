@@ -163,7 +163,7 @@ int stream_data(int client_fd, struct sockaddr_in *addr, socklen_t *addr_len) {
     printf_error_handling(err);
   }
   /* Configuring the Audioconf struct, needed in order to play the file. */
-  if ((strcmp(libfile, "libspeed.so") == 0)) {
+  if (libfile && (strcmp(libfile, "libspeed.so") == 0)) {
     sample_rate = (option == 'd') ? (sample_rate * 0.5) : (sample_rate * 1.5);
   }
   configure_audio(&conf, channels, sample_size, sample_rate);
