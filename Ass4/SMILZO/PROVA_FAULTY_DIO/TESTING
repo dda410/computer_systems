@@ -1,2 +1,0 @@
-for file in 0??-*;do padsp ./client localhost 09 - Carol.mp3.wav; sleep 1s; done
-for file in 0??-*;do padsp ./client localhost 09 - Carol.mp3.wav; sleep 1s; done
